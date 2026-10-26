@@ -438,6 +438,14 @@ tr:last-child td {
   overflow: hidden;
   font-weight: 600;
 }
+.side-out {
+  width: 100%;
+  border: 0;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
 .side-label {
   white-space: nowrap;
 }

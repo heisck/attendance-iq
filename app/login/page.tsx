@@ -2,15 +2,17 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { FaceLine } from "@/components/FaceLine";
 import { QrPasswordField } from "@/components/QrPasswordField";
+import { post } from "@/lib/post";
 import { RESET_URL } from "@/lib/resetUrl";
 
-// Mock: any credentials work. Real check compares against LECTURER_EMAIL and
-// LECTURER_PASSWORD on the server.
-
+// Checked on the server against LECTURER_EMAIL and LECTURER_PASSWORD (5 tries per 10 minutes).
 export default function Login() {
   const router = useRouter();
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   return (
     <div className="signin">
       <main className="signin-main">
@@ -36,9 +38,14 @@ export default function Login() {
           </header>
           <form
             className="signin-panel"
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
-              router.push("/lecturer");
+              const f = new FormData(e.currentTarget);
+              setBusy(true);
+              const r = await post("/api/login", { email: f.get("email"), password: f.get("password"), company: f.get("company") });
+              setBusy(false);
+              if (r.ok) return router.push("/lecturer");
+              setError(r.error);
             }}
           >
             <div className="signin-brand">
@@ -68,7 +75,18 @@ export default function Login() {
             <a className="signin-forgot" href={RESET_URL} target="_blank" rel="noopener noreferrer">
               Forgot password?
             </a>
-            <button className="btn btn-ink btn-block">Unlock</button>
+            <div className="honeypot" aria-hidden="true">
+              <label htmlFor="company">Company</label>
+              <input id="company" name="company" tabIndex={-1} autoComplete="off" />
+            </div>
+            {error && (
+              <p className="notice notice-danger" role="alert">
+                {error}
+              </p>
+            )}
+            <button className="btn btn-ink btn-block" disabled={busy}>
+              {busy ? "Unlocking…" : "Unlock"}
+            </button>
           </form>
         </div>
       </main>

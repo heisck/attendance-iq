@@ -1,18 +1,15 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FaceCheck } from "@/components/FaceCheck";
 import { PhoneHead, PhoneState } from "@/components/Phone";
 import { PillField } from "@/components/PillField";
-import { roster, type RosterEntry } from "@/mocks/data";
+import { post } from "@/lib/post";
+import { FIELDS as LABELS, studentFields, type Field, type Step as Move } from "@/lib/schemas";
 
-type Field = "name" | "email" | "studentNo" | "indexNo";
-const LABELS: Record<Field, string> = {
-  name: "Full name",
-  email: "Student email",
-  studentNo: "Student number",
-  indexNo: "Index number",
-};
+// A roster suggestion: the name in full, everything else masked by the server.
+type Suggestion = Record<Field, string> & { id: string };
+const SEARCH_DELAY_MS = 250;
 const ICONS: Record<Field, React.ReactNode> = {
   name: (
     <>
@@ -37,30 +34,38 @@ const ICONS: Record<Field, React.ReactNode> = {
 };
 const EMPTY = { name: "", email: "", studentNo: "", indexNo: "" };
 
-// Masked so the suggestion list can't be used to harvest classmates' details.
-function mask(field: Field, value: string) {
-  if (field === "email") {
-    const [user, domain] = value.split("@");
-    return `${user[0]}••••@${domain}`;
-  }
-  return `••••${value.slice(-3)}`;
-}
 
-export function Register({ title, courseId, autoApprove }: { title: string; courseId: string; autoApprove: boolean }) {
-  const [step, setStep] = useState<"details" | "face" | "done">("details");
-  const [picked, setPicked] = useState<RosterEntry | null>(null);
+export function Register({ title, sessionId, autoApprove }: { title: string; sessionId: string; autoApprove: boolean }) {
+  const [step, setStep] = useState<"details" | "face" | "done" | "closed">("details");
+  const [picked, setPicked] = useState<Suggestion | null>(null);
   const [values, setValues] = useState(EMPTY);
   const [editing, setEditing] = useState<Record<Field, boolean>>({ name: true, email: true, studentNo: true, indexNo: true });
   const [consent, setConsent] = useState(false);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [ticket, setTicket] = useState<{ ticket: string; challenge: Move[] } | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState(false);
+  const company = useRef("");
 
-  // Mock: server-side search, min 3 letters, max 5 results, names only, rate limited.
-  const query = values.name.trim().toLowerCase();
-  const suggestions =
-    !picked && query.length >= 3
-      ? roster.filter((r) => r.courseId === courseId && !r.registered && r.name.toLowerCase().includes(query)).slice(0, 5)
-      : [];
+  // Server-side search: 3+ letters, up to 5 unregistered names.
+  const query = picked ? "" : values.name.trim();
+  useEffect(() => {
+    if (query.length < 3) return;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => {
+      fetch(`/api/s/${sessionId}/roster?q=${encodeURIComponent(query)}`, { signal: ctrl.signal })
+        .then((r) => (r.ok ? r.json() : []))
+        .then(setSuggestions, () => undefined);
+    }, SEARCH_DELAY_MS);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [query, sessionId]);
+  const shown = query.length >= 3 ? suggestions : [];
 
-  function pick(r: RosterEntry) {
+  function pick(r: Suggestion) {
     setPicked(r);
     setValues({ name: r.name, email: r.email, studentNo: r.studentNo, indexNo: r.indexNo });
     setEditing({ name: false, email: false, studentNo: false, indexNo: false });
@@ -77,9 +82,46 @@ export function Register({ title, courseId, autoApprove }: { title: string; cour
     setValues((v) => ({ ...v, [field]: "" }));
   }
 
-  const hasEdits = !picked || (Object.keys(EMPTY) as Field[]).some((f) => values[f] !== picked[f]);
-  const complete = (Object.keys(EMPTY) as Field[]).every((f) => values[f].trim()) && consent;
-  const faceDone = useCallback(() => setStep("done"), []);
+  const keys = Object.keys(EMPTY) as Field[];
+  const hasEdits = !picked || keys.some((f) => editing[f]);
+  const complete = keys.every((f) => values[f].trim()) && consent;
+  // Picked from the roster: send only what was retyped. Not listed: send everything.
+  const typed = Object.fromEntries(keys.filter((f) => !picked || editing[f]).map((f) => [f, values[f]]));
+
+  async function submitDetails(form: HTMLFormElement) {
+    const check = studentFields.partial().safeParse(typed);
+    if (!check.success) return setError(check.error.issues[0].message);
+    company.current = String(new FormData(form).get("company") ?? "");
+    setBusy(true);
+    const r = await post(`/api/s/${sessionId}/ticket`, {});
+    setBusy(false);
+    if (r.status === 410) return setStep("closed");
+    if (!r.ok) return setError(r.error);
+    setError("");
+    setTicket(r.data);
+    setStep("face");
+  }
+
+  async function faceDone(frames: string[]) {
+    const r = await post(`/api/s/${sessionId}/register`, { ticket: ticket!.ticket, rosterId: picked?.id, fields: typed, frames, company: company.current });
+    if (r.status === 410) return setStep("closed");
+    if (!r.ok) {
+      setError(r.error);
+      return setStep("details");
+    }
+    setPending(r.data.status === "pending");
+    setStep("done");
+  }
+
+  if (step === "closed")
+    return (
+      <main className="phone">
+        <PhoneHead title={title} />
+        <PhoneState icon="lock" title="Registration has closed">
+          <p className="muted">Ask your lecturer when the next registration opens.</p>
+        </PhoneState>
+      </main>
+    );
 
   return (
     <main className="phone">
@@ -90,7 +132,7 @@ export function Register({ title, courseId, autoApprove }: { title: string; cour
           style={{ display: "contents" }}
           onSubmit={(e) => {
             e.preventDefault();
-            setStep("face");
+            submitDetails(e.currentTarget);
           }}
         >
           <div className="phone-body">
@@ -119,7 +161,7 @@ export function Register({ title, courseId, autoApprove }: { title: string; cour
                       {ICONS[field]}
                     </svg>
                     <span id={field} className={`pill-value ${field === "name" ? "" : "mono"}`}>
-                      {field === "name" ? values.name : mask(field, values[field])}
+                      {values[field]}
                     </span>
                     <span className="pill-label">{LABELS[field]}</span>
                     <button type="button" className="pill-eye pill-change" onClick={() => edit(field)} aria-label={`Change ${LABELS[field]}`}>
@@ -127,9 +169,9 @@ export function Register({ title, courseId, autoApprove }: { title: string; cour
                     </button>
                   </div>
                 )}
-                {field === "name" && suggestions.length > 0 && (
+                {field === "name" && shown.length > 0 && (
                   <ul className="suggest" aria-label="Matching names">
-                    {suggestions.map((r) => (
+                    {shown.map((r) => (
                       <li key={r.id}>
                         <button type="button" onClick={() => pick(r)}>
                           {r.name}
@@ -166,21 +208,27 @@ export function Register({ title, courseId, autoApprove }: { title: string; cour
               <label htmlFor="company">Company</label>
               <input id="company" name="company" tabIndex={-1} autoComplete="off" />
             </div>
+
+            {error && (
+              <p className="notice notice-danger" role="alert">
+                {error}
+              </p>
+            )}
           </div>
           <div className="phone-foot">
-            <button className="btn btn-ink btn-block" disabled={!complete}>
-              Continue to face check
+            <button className="btn btn-ink btn-block" disabled={!complete || busy}>
+              {busy ? "One moment…" : "Continue to face check"}
             </button>
           </div>
         </form>
       )}
 
-      {step === "face" && <FaceCheck onDone={faceDone} />}
+      {step === "face" && ticket && <FaceCheck challenge={ticket.challenge} onFrames={faceDone} />}
 
       {step === "done" && (
-        <PhoneState icon={hasEdits && !autoApprove ? "clock" : "check"} title={hasEdits && !autoApprove ? "Submitted for approval" : "You're registered"}>
+        <PhoneState icon={pending ? "clock" : "check"} title={pending ? "Submitted for approval" : "You're registered"}>
           <p className="muted">
-            {hasEdits && !autoApprove
+            {pending
               ? "Your lecturer will check your details. You can mark attendance once approved."
               : "Use the attendance link your lecturer shares each week."}
           </p>

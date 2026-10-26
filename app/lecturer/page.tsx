@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { courses, roster, sessions } from "@/mocks/data";
+import { listCourses, listSessions } from "@/lib/db";
 import { KIND, progress, Ring, SessionRow } from "./SessionRow";
 
-export default function Dashboard() {
+export default async function Dashboard() {
+  const [sessions, courses] = await Promise.all([listSessions(), listCourses()]);
   const live = sessions.filter((s) => s.status === "live");
   const schedule = sessions
     .filter((s) => s.status !== "closed")
@@ -21,14 +22,13 @@ export default function Dashboard() {
               <h2 id="live-h">Live now</h2>
               <div className="live-cards">
                 {live.map((s) => {
-                  const c = courses.find((c) => c.id === s.courseId)!;
                   const p = progress(s);
                   return (
                     <article key={s.id} className="live-card">
                       <span className="live-finder" aria-hidden="true" />
                       <span className="pill pill-live">Live</span>
-                      <h3 className="live-code">{c.code}</h3>
-                      <p className="live-name">{c.name}</p>
+                      <h3 className="live-code">{s.code}</h3>
+                      <p className="live-name">{s.courseName}</p>
                       <p className="live-meta">
                         {KIND[s.kind]} · Week {s.week} · {s.start}–{s.end}
                       </p>
@@ -37,7 +37,7 @@ export default function Dashboard() {
                           <strong>{p.done}</strong> of {p.total} {p.label}
                         </span>
                         <span className="bar" aria-hidden="true">
-                          <span style={{ width: `${(p.done / p.total) * 100}%` }} />
+                          <span style={{ width: `${p.total ? (p.done / p.total) * 100 : 0}%` }} />
                         </span>
                       </div>
                       <Link href={`/lecturer/session/${s.id}`} className="btn btn-light">
@@ -77,6 +77,7 @@ export default function Dashboard() {
                 All courses
               </Link>
             </div>
+            {courses.length === 0 && <p className="muted">No courses yet. Press + to create a session and add one.</p>}
             <ul className="mini-courses">
               {courses.map((c) => (
                 <li key={c.id}>
@@ -88,7 +89,7 @@ export default function Dashboard() {
                     </span>
                     <span className="mini-main">
                       <strong>{c.code}</strong>
-                      <span>{roster.filter((r) => r.courseId === c.id).length} students</span>
+                      <span>{c.students} students</span>
                     </span>
                     <svg className="mini-go" viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M10 6l6 6-6 6" />
@@ -99,7 +100,7 @@ export default function Dashboard() {
             </ul>
           </section>
 
-          {turnout && (
+          {turnout && turnout.total > 0 && (
             <section className="dash-section" aria-labelledby="turnout-h">
               <h2 id="turnout-h">Last turnout</h2>
               <div className="turnout">
@@ -107,7 +108,7 @@ export default function Dashboard() {
                 <strong className="turnout-pct">{Math.round((turnout.done / turnout.total) * 100)}%</strong>
               </div>
               <p className="small muted turnout-note">
-                {turnout.done} of {turnout.total} present · {courses.find((c) => c.id === last.courseId)!.code} week {last.week}
+                {turnout.done} of {turnout.total} present · {last.code} week {last.week}
               </p>
             </section>
           )}

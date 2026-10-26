@@ -1,22 +1,26 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 
+// `video`: pass a ref to read frames from the stream (QR scanning, face capture).
 export function Camera({
   facing,
   children,
+  video: external,
 }: {
   facing: "user" | "environment";
   children?: React.ReactNode;
+  video?: RefObject<HTMLVideoElement | null>;
 }) {
-  const video = useRef<HTMLVideoElement>(null);
+  const own = useRef<HTMLVideoElement>(null);
+  const video = external ?? own;
   const [error, setError] = useState("");
 
   useEffect(() => {
     let stream: MediaStream | undefined;
     let cancelled = false;
     navigator.mediaDevices
-      ?.getUserMedia({ video: { facingMode: facing }, audio: false })
+      ?.getUserMedia({ video: { facingMode: facing, width: { ideal: 1280 } }, audio: false })
       .then((s) => {
         if (cancelled) return s.getTracks().forEach((t) => t.stop());
         stream = s;
@@ -27,7 +31,7 @@ export function Camera({
       cancelled = true;
       stream?.getTracks().forEach((t) => t.stop());
     };
-  }, [facing]);
+  }, [facing, video]);
 
   return (
     <div className={`camera ${facing === "user" ? "camera-mirror" : ""}`}>

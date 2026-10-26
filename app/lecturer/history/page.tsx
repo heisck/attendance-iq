@@ -1,8 +1,8 @@
-import { sessions } from "@/mocks/data";
+import { listSessions } from "@/lib/db";
 import { SessionRow } from "../SessionRow";
 
-export default function History() {
-  const past = sessions.filter((s) => s.status === "closed").sort((a, b) => (b.date + b.start).localeCompare(a.date + a.start));
+export default async function History() {
+  const past = (await listSessions()).filter((s) => s.status === "closed").sort((a, b) => (b.date + b.start).localeCompare(a.date + a.start));
 
   return (
     <main className="page page-narrow">

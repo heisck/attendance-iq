@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/checks.test.mjs",
+    "db:migrate": "node --env-file-if-exists=.env.local db/migrate.mjs"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",

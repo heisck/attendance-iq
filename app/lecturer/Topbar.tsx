@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type MouseEvent, type ToggleEvent } from "react";
-import { approvals, courses, LECTURER_NAME, roster } from "@/mocks/data";
+import type { Approval } from "@/lib/db";
 
 // Section pages get their title here as the h1. Deeper pages (one session, one course)
 // keep their own h1 and show the section as a way back.
@@ -18,12 +18,19 @@ const TITLE: Record<string, string> = {
 const BELL_W = 320;
 const RESULTS = 6;
 
-const INITIALS = LECTURER_NAME.split(/\s+/)
-  .map((w) => w[0])
-  .join("")
-  .replace(/[^A-Z]/gi, "")
-  .slice(0, 2)
-  .toUpperCase();
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join("")
+    .replace(/[^A-Z]/gi, "")
+    .slice(0, 2)
+    .toUpperCase();
+
+type Index = {
+  courses: { id: string; code: string; name: string }[];
+  students: { id: string; courseId: string; name: string; indexNo: string; studentNo: string }[];
+};
 
 // Native popover handles Esc and click-outside; we only drop it below its button, right
 // edges lined up and kept on screen (it sits in the top layer, so it can't inherit a position).
@@ -38,17 +45,20 @@ function placeBelow(e: ToggleEvent<HTMLDivElement>) {
 const closeMenu = (e: MouseEvent<HTMLElement>) => e.currentTarget.closest<HTMLElement>("[popover]")?.hidePopover();
 
 // Dashboard search over courses (code, name) and students (name, index, student number).
-// Results show while the field has focus; each opens the course it belongs to.
+// The list loads once, the first time the field gets focus. Each result opens its course.
 function Search() {
   const [q, setQ] = useState("");
+  const [index, setIndex] = useState<Index>({ courses: [], students: [] });
+  const [loaded, setLoaded] = useState(false);
+  const { courses, students } = index;
   const term = q.trim().toLowerCase();
-  const code = (id: string) => courses.find((c) => c.id === id)!.code;
+  const code = (id: string) => courses.find((c) => c.id === id)?.code ?? "";
   const hits = term
     ? [
         ...courses
           .filter((c) => `${c.code} ${c.name}`.toLowerCase().includes(term))
           .map((c) => ({ key: c.id, href: `/lecturer/courses/${c.id}`, label: c.code, meta: c.name })),
-        ...roster
+        ...students
           .filter((r) => `${r.name} ${r.indexNo} ${r.studentNo}`.toLowerCase().includes(term))
           .map((r) => ({ key: r.id, href: `/lecturer/courses/${r.courseId}`, label: r.name, meta: `${r.indexNo} · ${code(r.courseId)}` })),
       ].slice(0, RESULTS)
@@ -67,6 +77,13 @@ function Search() {
         aria-label="Search courses or students"
         value={q}
         onChange={(e) => setQ(e.target.value)}
+        onFocus={() => {
+          if (loaded) return;
+          setLoaded(true);
+          fetch("/api/lecturer/search")
+            .then((r) => (r.ok ? r.json() : Promise.reject()))
+            .then(setIndex, () => setLoaded(false));
+        }}
         onKeyDown={(e) => e.key === "Escape" && setQ("")}
       />
       {term && (
@@ -89,7 +106,7 @@ function Search() {
   );
 }
 
-export function Topbar() {
+export function Topbar({ name, approvals }: { name: string; approvals: Approval[] }) {
   const path = usePathname();
   const title = TITLE[path];
   const back = path.startsWith("/lecturer/courses/") ? ["/lecturer/courses", "Courses"] : ["/lecturer", "Dashboard"];
@@ -148,7 +165,7 @@ export function Topbar() {
                 <strong>{a.student}</strong>
                 <span className="bell-meta">
                   {a.kind === "duplicate_face" ? `Looks like ${a.matches}` : "Changed roster details"} ·{" "}
-                  {courses.find((c) => c.id === a.courseId)!.code}
+                  {a.courseCode}
                 </span>
               </span>
             </Link>
@@ -159,11 +176,11 @@ export function Topbar() {
             </Link>
           )}
         </div>
-        <div className="top-user" title={LECTURER_NAME}>
+        <div className="top-user" title={name}>
           <span className="top-avatar" aria-hidden="true">
-            {INITIALS}
+            {initials(name)}
           </span>
-          <span className="top-name">{LECTURER_NAME}</span>
+          <span className="top-name">{name}</span>
         </div>
       </div>
     </header>

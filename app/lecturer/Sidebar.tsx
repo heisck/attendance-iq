@@ -92,6 +92,8 @@ export function Sidebar() {
         </svg>
       </button>
       <div className="nav-scrim" aria-hidden="true" onClick={() => setOpen(false)} />
+      {/* Sign out is a POST, so no prefetch or stray link can trigger it. */}
+      <form id="sign-out" action="/api/logout" method="post" hidden />
       <nav
         id="side-nav"
         className="side"
@@ -117,7 +119,14 @@ export function Sidebar() {
         <Item href="/lecturer/courses" icon="courses" label="Courses" active={path.startsWith("/lecturer/courses")} />
         <Item href="/lecturer/history" icon="history" label="History" active={path === "/lecturer/history"} />
         <div className="side-block side-fill" />
-        <Item href="/login" icon="signOut" label="Sign out" />
+        <button type="submit" form="sign-out" className="side-block side-link side-out" title="Sign out">
+          <span className="side-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              {ICON.signOut}
+            </svg>
+          </span>
+          <span className="side-label">Sign out</span>
+        </button>
       </nav>
     </>
   );

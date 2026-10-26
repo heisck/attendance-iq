@@ -3,27 +3,46 @@
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 
-// Mock: makes a random token every second. Real tokens will come from the server (signed, server time inside).
-export function RotatingQr({ sessionId, nodeId }: { sessionId: string; nodeId: string }) {
+// `src`: a Server-Sent Events stream of signed codes, one per second (the server makes them; this
+// screen never holds the secret). The stream sends "closed" when the session ends.
+// `value`: a fixed code instead (the registration link).
+export function RotatingQr({ src, value, onClosed }: { src?: string; value?: string; onClosed?: () => void }) {
   const [svg, setSvg] = useState("");
+  const [lost, setLost] = useState(false);
 
   useEffect(() => {
-    const draw = () => {
-      const token = `${sessionId}.${nodeId}.${Date.now()}.${Math.random().toString(36).slice(2, 10)}`;
-      QRCode.toString(token, { type: "svg", margin: 1, errorCorrectionLevel: "M" }).then(setSvg);
+    const draw = (text: string) => QRCode.toString(text, { type: "svg", margin: 1, errorCorrectionLevel: "M" }).then(setSvg);
+    if (value) {
+      draw(value);
+      return;
+    }
+    if (!src) return;
+    const events = new EventSource(src);
+    events.onmessage = (e) => {
+      setLost(false);
+      draw(e.data);
     };
-    draw();
-    const id = setInterval(draw, 1000);
-    return () => clearInterval(id);
-  }, [sessionId, nodeId]);
+    events.addEventListener("closed", () => {
+      events.close();
+      onClosed?.();
+    });
+    // EventSource retries by itself after a dropped connection; a refused one (closed session) stays CLOSED.
+    events.onerror = () => {
+      setLost(true);
+      if (events.readyState === EventSource.CLOSED) onClosed?.();
+    };
+    return () => events.close();
+  }, [src, value, onClosed]);
 
   return (
     <div className="stack" style={{ gap: "var(--s2)" }}>
-      {/* SVG is generated locally by the qrcode lib, not user input. */}
-      <div className="qr" role="img" aria-label="Attendance QR code, changes every second" dangerouslySetInnerHTML={{ __html: svg }} />
-      <div className="tick" aria-hidden="true">
-        <span />
-      </div>
+      {/* SVG is generated locally by the qrcode lib from a server-signed code, not user input. */}
+      <div className="qr" role="img" aria-label={value ? "QR code for the student link" : "Attendance QR code, changes every second"} data-lost={lost || undefined} dangerouslySetInnerHTML={{ __html: svg }} />
+      {!value && (
+        <div className="tick" aria-hidden="true">
+          <span />
+        </div>
+      )}
     </div>
   );
 }
