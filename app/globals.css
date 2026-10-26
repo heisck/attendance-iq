@@ -1,0 +1,2797 @@
+:root {
+  /* Colors */
+  --paper: #f6f4ee;
+  --surface: #ffffff;
+  --ink: #17201b;
+  --ink-2: #4a544e;
+  --line: #d9d5ca;
+  --brand: #1e5a43;
+  --brand-press: #164534;
+  --brand-soft: #e2ede6;
+  --on-brand: #ffffff;
+  --warn: #7a4f00;
+  --warn-soft: #fbefd3;
+  --danger: #a3271f;
+  --danger-soft: #fbe4e1;
+  --focus: #c27a12;
+
+  /* Type */
+  --font-sans: var(--font-dm-sans), system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.625rem;
+  --text-2xl: 2.125rem;
+
+  /* Space */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+
+  --radius: 10px;
+  --tap: 48px;
+
+  /* Monochrome design system (sign-in, lecturer shell). */
+  --si-ink: #0a0a0a;
+  --si-ink-hover: #2a2a2a;
+  --si-white: #ffffff;
+  --si-muted: #555555;
+  --si-field: #ececec;
+  --si-field-focus: #e4e4e4;
+  --si-placeholder: #5e5e5e;
+  --si-outline: #d6d6d6;
+  --si-soft: #f4f4f4;
+  --si-ash: #e6e6e4;
+  --si-round: 28px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.2;
+  font-weight: 600;
+}
+h1 {
+  font-size: var(--text-xl);
+}
+h2 {
+  font-size: var(--text-lg);
+}
+h3 {
+  font-size: var(--text-md);
+}
+
+a {
+  color: var(--brand);
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.muted {
+  color: var(--ink-2);
+}
+.small {
+  font-size: var(--text-sm);
+}
+.mono {
+  font-family: var(--font-mono);
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+.spread {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  min-height: var(--tap);
+  min-width: var(--tap);
+  padding: 0 var(--s5);
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn:hover {
+  border-color: var(--ink-2);
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--on-brand);
+}
+.btn-primary:hover {
+  background: var(--brand-press);
+  border-color: var(--brand-press);
+}
+.btn-danger {
+  color: var(--danger);
+}
+.btn-danger:hover {
+  border-color: var(--danger);
+}
+.btn-block {
+  width: 100%;
+}
+.btn-sm {
+  min-height: 44px;
+  padding: 0 var(--s4);
+  font-size: var(--text-sm);
+}
+
+/* Forms */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+.field label,
+.label {
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+.input {
+  min-height: var(--tap);
+  width: 100%;
+  padding: 0 var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.input:focus-visible {
+  border-color: var(--brand);
+}
+.hint {
+  font-size: var(--text-sm);
+  color: var(--ink-2);
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.btn:has(:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.honeypot {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* Segmented toggle */
+.segmented {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: var(--s1);
+  gap: var(--s1);
+}
+.segmented button {
+  min-height: 44px;
+  border: 0;
+  border-radius: calc(var(--radius) - 3px);
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.segmented button[aria-pressed="true"] {
+  background: var(--brand);
+  color: var(--on-brand);
+}
+
+/* Surfaces */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--s5);
+}
+.notice {
+  border-radius: var(--radius);
+  padding: var(--s3) var(--s4);
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.notice-ok {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.notice-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Status pill */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  background: var(--si-white);
+  color: var(--si-muted);
+  border: 1.5px solid var(--si-outline);
+}
+.pill-live {
+  background: var(--si-ink);
+  border-color: var(--si-ink);
+  color: var(--si-white);
+}
+.pill-live::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: live-dot 1.6s ease-in-out infinite;
+}
+@keyframes live-dot {
+  50% {
+    opacity: 0.25;
+  }
+}
+.pill-warn {
+  background: var(--warn-soft);
+  border-color: var(--warn-soft);
+  color: var(--warn);
+}
+
+/* Tables */
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+th,
+td {
+  text-align: left;
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+th {
+  font-weight: 600;
+  color: var(--ink-2);
+  background: var(--paper);
+}
+tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Lecturer shell: white sidebar and content panel floating on the ash contour
+   backdrop. Sidebar is a stack of white blocks; the active link drops its white so
+   the backdrop shows through and its neighbours curve around it.
+   Two widths set by Sidebar.tsx: full (labels) and rail (icons). >=1024px it sits
+   beside the page; below that it slides in over the page from the edge tab. */
+.lect {
+  --side-w: 248px;
+  --side-curve: 22px;
+  /* Map the older tokens onto the monochrome system so every lecturer page follows it. */
+  --focus: var(--si-ink);
+  --ink: var(--si-ink);
+  --ink-2: var(--si-muted);
+  --line: var(--si-outline);
+  --paper: var(--si-soft);
+  --surface: var(--si-white);
+  --brand: var(--si-ink);
+  --brand-press: var(--si-ink-hover);
+  --brand-soft: var(--si-soft);
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--side-w) minmax(0, 1fr);
+  gap: var(--s4);
+  min-height: 100dvh;
+  padding: var(--s4);
+  background: var(--si-ash);
+  isolation: isolate;
+  transition: grid-template-columns 300ms cubic-bezier(0.65, 0, 0.35, 1);
+}
+.lect:has(> .side[data-mode="rail"]) {
+  --side-w: 76px;
+}
+/* Same contours as sign-in, pushed to white so they read as faint lines on the ash. */
+.lect::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: url("/topo.svg") center / cover no-repeat;
+  filter: brightness(2);
+  opacity: 0.9;
+  pointer-events: none;
+}
+.side {
+  position: sticky;
+  top: var(--s4);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - 2 * var(--s4));
+  touch-action: pan-y;
+}
+.side-block {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s4);
+  background: var(--si-white);
+  color: var(--si-ink);
+  text-decoration: none;
+  transition:
+    border-radius 300ms cubic-bezier(0.65, 0, 0.35, 1),
+    background-color 300ms ease,
+    color 300ms ease;
+}
+.side-block:first-child {
+  border-radius: var(--si-round) var(--si-round) 0 0;
+}
+.side-block:last-child {
+  border-radius: 0 0 var(--si-round) var(--si-round);
+}
+/* The logo doubles as the width toggle: rail <-> full. */
+.side-brand {
+  width: 100%;
+  padding-block: var(--s4) var(--s2);
+  border: 0;
+  font: inherit;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-align: left;
+  cursor: pointer;
+}
+.side-logo {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  transition: background-color 200ms ease;
+}
+.side-brand:hover .side-logo {
+  background: var(--si-soft);
+}
+.side-logo img {
+  display: block;
+  width: 27px;
+  height: 28px;
+}
+.side-link {
+  min-height: 60px;
+  overflow: hidden;
+  font-weight: 600;
+}
+.side-label {
+  white-space: nowrap;
+}
+.side-link:not([aria-current]):hover .side-icon {
+  background: var(--si-soft);
+}
+.side-icon {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  transition:
+    background-color 300ms ease,
+    color 300ms ease,
+    transform 300ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+.side-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* Active: the band of backdrop, a black circle for the icon. */
+.side-link[aria-current="page"] {
+  background: transparent;
+}
+.side-link[aria-current="page"] .side-icon {
+  background: var(--si-ink);
+  color: var(--si-white);
+  transform: scale(1.08);
+}
+.side-block:has(+ [aria-current="page"]) {
+  border-bottom-right-radius: var(--side-curve);
+}
+[aria-current="page"] + .side-block {
+  border-top-right-radius: var(--side-curve);
+}
+.side-fill {
+  flex: 1;
+}
+/* Rail: icons only. The 16px padding already centres a 44px icon in 76px, so nothing jumps. */
+.side[data-mode="rail"] .side-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.side[data-mode="rail"] .side-block:has(+ [aria-current="page"]) {
+  border-bottom-left-radius: var(--side-curve);
+}
+.side[data-mode="rail"] [aria-current="page"] + .side-block {
+  border-top-left-radius: var(--side-curve);
+}
+.menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: var(--s2);
+  border: 0;
+  border-radius: 20px;
+  background: var(--si-white);
+  color: var(--si-ink);
+  box-shadow:
+    0 18px 48px rgb(0 0 0 / 0.2),
+    0 2px 8px rgb(0 0 0 / 0.08);
+}
+.menu:popover-open {
+  animation: menu-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+.menu-head {
+  display: flex;
+  flex-direction: column;
+  padding: var(--s2) var(--s3) var(--s3);
+  margin-bottom: var(--s1);
+  border-bottom: 1px solid var(--si-field);
+}
+.menu-head span {
+  font-size: var(--text-sm);
+  color: var(--si-muted);
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 44px;
+  padding: 0 var(--s3);
+  border-radius: 12px;
+  color: var(--si-ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+.menu-item:hover {
+  background: var(--si-soft);
+}
+.menu-item svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.sheet {
+  min-width: 0;
+  min-height: calc(100dvh - 2 * var(--s4));
+  background: var(--si-white);
+  border-radius: var(--si-round);
+}
+.nav-tab,
+.nav-scrim {
+  display: none;
+}
+/* Below 1024px: the page fills the screen edge to edge and the sidebar slides over it.
+   Its own ash fill stands in for the backdrop, so the band and curves read the same. */
+@media (max-width: 1023px) {
+  .lect {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0;
+  }
+  .sheet {
+    min-height: 100dvh;
+    border-radius: 0;
+  }
+  /* Room for the corner tab beside the avatar. */
+  .lect .top {
+    padding-right: 52px;
+  }
+  .side {
+    position: fixed;
+    top: var(--s3);
+    bottom: var(--s3);
+    left: var(--s3);
+    z-index: 30;
+    width: var(--side-w);
+    height: auto;
+    border-radius: var(--si-round);
+    background: var(--si-ash);
+    box-shadow: 0 18px 48px rgb(0 0 0 / 0.25);
+    translate: calc(-100% - 2 * var(--s3)) 0;
+    visibility: hidden;
+    transition:
+      translate 300ms cubic-bezier(0.65, 0, 0.35, 1),
+      width 300ms cubic-bezier(0.65, 0, 0.35, 1),
+      visibility 0s 300ms;
+  }
+  .side[data-open] {
+    translate: 0;
+    visibility: visible;
+    transition:
+      translate 300ms cubic-bezier(0.65, 0, 0.35, 1),
+      width 300ms cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  .nav-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 29;
+    background: rgb(0 0 0 / 0.3);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 300ms ease;
+  }
+  .lect:has(.side[data-open]) .nav-scrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .lect:has(.side[data-open]) .nav-tab {
+    visibility: hidden;
+  }
+  html:has(.side[data-open]) {
+    overflow: hidden;
+  }
+  /* Corner tab: a 44px target in the top right, drawn as a slim black tongue against
+     the right edge, level with the top bar. */
+  .nav-tab {
+    display: grid;
+    place-items: center end;
+    position: fixed;
+    top: 12px;
+    right: 0;
+    z-index: 28;
+    width: 44px;
+    height: 72px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--si-white);
+    cursor: pointer;
+  }
+  .nav-tab::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: 26px;
+    border-radius: 16px 0 0 16px;
+    background: var(--si-ink);
+    box-shadow: 0 6px 18px rgb(0 0 0 / 0.2);
+    transition: width 200ms ease;
+  }
+  .nav-tab:hover::before {
+    width: 32px;
+  }
+  .nav-tab svg {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    margin-right: 3px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+}
+
+/* Top bar: logo and page title, then + (new session), the approvals bell and the profile. */
+.top {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--s5) var(--s4) 0;
+}
+/* Dashboard search: sits where other pages show their title. */
+.top-search {
+  position: relative;
+  flex: 1;
+  max-width: 380px;
+  min-width: 0;
+}
+.top-search > svg {
+  position: absolute;
+  top: 50%;
+  left: var(--s4);
+  width: 20px;
+  height: 20px;
+  translate: 0 -50%;
+  fill: none;
+  stroke: var(--si-muted);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.top-search-input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 var(--s4) 0 44px;
+  border: 1.5px solid transparent;
+  border-radius: 999px;
+  background: var(--si-soft);
+  color: var(--si-ink);
+  font: inherit;
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease;
+}
+/* Esc clears it; the browser's own clear button clashes with the monochrome system. */
+.top-search-input::-webkit-search-cancel-button {
+  appearance: none;
+}
+.top-search-input::placeholder {
+  color: var(--si-placeholder);
+}
+.top-search-input:focus {
+  outline: none;
+  border-color: var(--si-ink);
+  background: var(--si-white);
+}
+.search-results {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  min-width: 260px;
+  padding: var(--s2);
+  border-radius: 20px;
+  background: var(--si-white);
+  box-shadow:
+    0 18px 48px rgb(0 0 0 / 0.2),
+    0 2px 8px rgb(0 0 0 / 0.08);
+}
+.top-search:not(:focus-within) .search-results {
+  display: none;
+}
+.search-empty {
+  padding: var(--s3);
+  color: var(--si-muted);
+  font-size: var(--text-sm);
+}
+.top-title {
+  font-size: clamp(1.5rem, 2.6vw, 1.875rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.top-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  min-height: 44px;
+  padding-right: var(--s3);
+  color: var(--si-muted);
+  font-weight: 600;
+  text-decoration: none;
+}
+.top-back:hover {
+  color: var(--si-ink);
+}
+.top-back svg,
+.top-btn svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-left: auto;
+}
+.top-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--si-ink);
+  cursor: pointer;
+  transition:
+    background-color 200ms ease,
+    transform 300ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+.top-bell:hover,
+.top-actions:has(#bell-menu:popover-open) .top-bell {
+  background: var(--si-soft);
+}
+.top-new {
+  background: var(--si-ink);
+  color: var(--si-white);
+}
+.top-new svg {
+  stroke-width: 2.2;
+}
+.top-new:hover {
+  background: var(--si-ink-hover);
+  transform: rotate(90deg);
+}
+.top-new[data-open] {
+  rotate: 45deg;
+}
+.top-user {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-left: var(--s1);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.top-avatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--si-ink);
+  color: var(--si-white);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+@media (max-width: 599px) {
+  .top-name {
+    display: none;
+  }
+}
+.top-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--si-ink);
+  color: var(--si-white);
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px var(--si-white);
+}
+.bell-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  padding: var(--s3);
+  border-radius: 12px;
+  color: var(--si-ink);
+  text-decoration: none;
+  line-height: 1.35;
+}
+.bell-item:hover {
+  background: var(--si-soft);
+}
+.bell-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  border-radius: 50%;
+  border: 2px solid var(--si-ink);
+}
+.bell-dot[data-kind="duplicate_face"] {
+  background: var(--si-ink);
+}
+.bell-meta {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--si-muted);
+}
+.bell-all {
+  width: 100%;
+  min-height: 48px;
+  margin-top: var(--s2);
+}
+.lect .page {
+  padding-top: var(--s5);
+}
+/* Narrow pages keep their reading width but line up under the title, not centred. */
+.lect .page-narrow {
+  max-width: 1120px;
+}
+.lect .page-narrow > * {
+  max-width: 640px;
+}
+.lect .card {
+  scroll-margin-top: var(--s4);
+}
+
+/* Older surfaces inside the lecturer shell get the system's softer corners. */
+.lect .card,
+.lect .table-wrap {
+  border-radius: 20px;
+}
+
+/* Lecturer dashboard: see app/lecturer/page.tsx. */
+.dash {
+  gap: var(--s6);
+}
+.dash-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s4);
+  flex-wrap: wrap;
+}
+.dash-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+.dash-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--s4);
+  border: 1.5px solid var(--si-outline);
+  border-radius: 999px;
+  color: var(--si-ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.dash-link:hover {
+  border-color: var(--si-ink);
+}
+/* Right column: one soft grey panel, like a tray beside the work. */
+.dash-aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s6);
+  padding: var(--s5);
+  border-radius: var(--si-round);
+  background: var(--si-soft);
+}
+.dash-aside .dash-link {
+  background: var(--si-white);
+  border-color: var(--si-white);
+}
+.dash-aside .dash-link:hover {
+  border-color: var(--si-ink);
+}
+.mini-courses {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mini-course {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2);
+  border-radius: 20px;
+  color: var(--si-ink);
+  text-decoration: none;
+  transition: background-color 200ms ease;
+}
+.mini-course:hover {
+  background: var(--si-white);
+}
+.mini-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--si-ink);
+  color: var(--si-white);
+}
+.mini-icon svg,
+.mini-go {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mini-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+.mini-main span {
+  font-size: var(--text-sm);
+  color: var(--si-muted);
+}
+.mini-go {
+  color: var(--si-muted);
+  transition: translate 200ms ease;
+}
+.mini-course:hover .mini-go {
+  translate: 3px 0;
+  color: var(--si-ink);
+}
+.turnout {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(100%, 200px);
+  margin: var(--s2) auto 0;
+}
+.ring {
+  width: 100%;
+}
+.ring line {
+  stroke: #cfcfcf;
+  stroke-width: 3.2;
+  stroke-linecap: round;
+}
+.ring line[data-on] {
+  stroke: var(--si-ink);
+}
+.turnout-pct {
+  position: absolute;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.turnout-note {
+  text-align: center;
+}
+.dash h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.dash-section,
+.dash-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+.dash-stack {
+  gap: var(--s6);
+}
+.live-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: var(--s4);
+}
+.live-card {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s2);
+  padding: var(--s5);
+  border-radius: var(--si-round);
+  background: var(--si-ink);
+  color: var(--si-white);
+}
+.live-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url("/topo.svg") center / cover no-repeat;
+  opacity: 0.28;
+}
+.live-card > * {
+  position: relative;
+}
+.live-card .pill-live {
+  background: var(--si-white);
+  border-color: var(--si-white);
+  color: var(--si-ink);
+}
+/* QR finder in the corner; turns a quarter when the card is hovered. */
+.live-finder {
+  position: absolute;
+  top: var(--s5);
+  right: var(--s5);
+  width: 34px;
+  height: 34px;
+  border: 4px solid var(--si-white);
+  border-radius: 10px;
+  transition: transform 500ms cubic-bezier(0.65, 0, 0.35, 1);
+}
+.live-finder::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 3px;
+  background: var(--si-white);
+}
+.live-card:hover .live-finder {
+  transform: rotate(90deg);
+}
+.live-code {
+  margin-top: var(--s2);
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.live-name {
+  color: #d6d6d6;
+}
+.live-meta {
+  color: #bdbdbd;
+  font-size: var(--text-sm);
+}
+.live-progress {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin: var(--s2) 0 var(--s3);
+}
+.bar {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.18);
+  overflow: hidden;
+}
+.bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--si-white);
+}
+.bar-light {
+  background: var(--si-field);
+}
+.bar-light > span {
+  background: var(--si-ink);
+}
+.btn-light {
+  min-height: 48px;
+  border-radius: 999px;
+  border-color: var(--si-white);
+  background: var(--si-white);
+  color: var(--si-ink);
+}
+.btn-light:hover {
+  border-color: #e4e4e4;
+  background: #e4e4e4;
+}
+.dash-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: var(--s6);
+  align-items: start;
+}
+.srows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.srow {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  padding: var(--s2) var(--s4) var(--s2) var(--s2);
+  border-radius: 20px;
+  color: var(--si-ink);
+  text-decoration: none;
+  transition: background-color 200ms ease;
+}
+.srow:hover {
+  background: var(--si-soft);
+}
+/* Date tile: outlined; today's goes solid black. */
+.srow-date {
+  flex: none;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  width: 60px;
+  height: 60px;
+  border: 1.5px solid var(--si-outline);
+  border-radius: 16px;
+  background: var(--si-white);
+  line-height: 1.1;
+}
+.srow[data-today] .srow-date {
+  border-color: var(--si-ink);
+  background: var(--si-ink);
+  color: var(--si-white);
+}
+.srow[data-today] .srow-month {
+  color: #c4c4c4;
+}
+.srow-side {
+  flex: none;
+  font-size: var(--text-sm);
+  color: var(--si-muted);
+  font-variant-numeric: tabular-nums;
+}
+.srow-side strong {
+  color: var(--si-ink);
+}
+.srow-day {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+.srow-month {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--si-muted);
+}
+.srow-main {
+  flex: 1;
+  min-width: 0;
+}
+.srow-meta {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-sm);
+  color: var(--si-muted);
+}
+.pill-closed {
+  background: var(--si-field);
+  border-color: var(--si-field);
+}
+.course-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: var(--s4);
+}
+.course-code {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.course-facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s2);
+  margin: var(--s4) 0 0;
+  padding-top: var(--s4);
+  border-top: 1px solid var(--si-field);
+}
+.course-facts dt {
+  font-size: 0.75rem;
+  color: var(--si-muted);
+}
+.course-facts dd {
+  margin: 0;
+  font-weight: 700;
+}
+.course-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s5);
+  border: 1.5px solid var(--si-outline);
+  border-radius: var(--si-round);
+  color: var(--si-ink);
+  text-decoration: none;
+  transition: border-color 200ms ease;
+}
+.course-card:hover {
+  border-color: var(--si-ink);
+}
+.course-card .bar {
+  margin-top: var(--s3);
+}
+@media (max-width: 899px) {
+  .dash-cols {
+    grid-template-columns: 1fr;
+  }
+}
+/* Phones: code, course name, details and time each on their own line, beside the date. */
+@media (max-width: 599px) {
+  .srow {
+    display: grid;
+    grid-template-columns: 60px minmax(0, 1fr);
+    gap: 2px var(--s3);
+  }
+  .srow-date {
+    grid-row: span 2;
+  }
+  .srow-main .muted {
+    display: block;
+  }
+}
+
+/* Phones: My courses has its own page in the menu, so the dashboard doesn't repeat it. */
+@media (max-width: 899px) {
+  .dash-courses {
+    display: none;
+  }
+}
+
+/* New session: see app/lecturer/new/page.tsx. Form on the left, live preview on the right. */
+.ns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: var(--s6);
+  align-items: start;
+}
+.ns-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s6);
+}
+.ns-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.ns-step legend {
+  float: left;
+  width: 100%;
+  margin-bottom: var(--s3);
+  padding: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.ns-step .hint {
+  padding-left: var(--s2);
+}
+.ns-step .hint a {
+  color: var(--si-ink);
+  font-weight: 600;
+}
+/* Radio cards: outlined; the picked one goes solid black. */
+.choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: var(--s3);
+}
+.choice {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 88px;
+  padding: var(--s4) var(--s5);
+  border: 1.5px solid var(--si-outline);
+  border-radius: 22px;
+  background: var(--si-white);
+  color: var(--si-ink);
+  cursor: pointer;
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    color 200ms ease;
+}
+.choice:hover {
+  border-color: var(--si-ink);
+}
+.choice span {
+  font-size: var(--text-sm);
+  color: var(--si-muted);
+  transition: color 200ms ease;
+}
+.choice:has(:checked) {
+  border-color: var(--si-ink);
+  background: var(--si-ink);
+  color: var(--si-white);
+}
+.choice:has(:checked) span {
+  color: #cfcfcf;
+}
+.choice:has(:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.choice-add {
+  border-style: dashed;
+}
+.ns-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s3);
+}
+.ns-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  padding-top: var(--s5);
+  border-top: 1px solid var(--si-field);
+}
+.ns-actions .btn {
+  min-width: 140px;
+}
+.btn-outline {
+  min-height: 52px;
+  border: 1.5px solid var(--si-outline);
+  border-radius: 999px;
+  background: var(--si-white);
+  color: var(--si-ink);
+}
+.btn-outline:hover {
+  border-color: var(--si-ink);
+}
+.btn-outline-light {
+  min-height: 48px;
+  border: 1.5px solid rgb(255 255 255 / 0.5);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--si-white);
+}
+.btn-outline-light:hover {
+  border-color: var(--si-white);
+}
+.ns-preview {
+  position: sticky;
+  top: var(--s5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+.ns-preview-label {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.ns-preview .live-card {
+  padding-bottom: var(--s6);
+}
+.ns-preview-note {
+  margin-top: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid rgb(255 255 255 / 0.18);
+  font-size: var(--text-sm);
+}
+.ns-ready {
+  gap: var(--s3);
+}
+.ns-link {
+  align-self: stretch;
+  padding: var(--s3) var(--s4);
+  border-radius: 16px;
+  background: rgb(255 255 255 / 0.1);
+  font-family: var(--font-mono);
+  word-break: break-all;
+}
+/* Below 900px the preview would push the form down; the form says enough on its own. */
+@media (max-width: 899px) {
+  .ns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ns-preview {
+    display: none;
+  }
+}
+@media (max-width: 599px) {
+  .ns-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ns-actions .btn {
+    flex: 1;
+  }
+}
+
+/* Live session: see app/lecturer/session/[id]/LiveSession.tsx. A black stage holding
+   the QR (what gets projected) beside the grey count-and-phones panel. */
+.ls-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s4);
+}
+.ls-title {
+  font-size: clamp(1.5rem, 2.6vw, 2rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.ls-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s3);
+}
+.ls-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr);
+  gap: var(--s5);
+  align-items: start;
+}
+.ls-stage {
+  gap: var(--s4);
+  padding: var(--s6) var(--s5) var(--s5);
+}
+.ls-meta {
+  padding-right: 48px;
+}
+.ls-qr {
+  align-self: stretch;
+}
+.ls-qr .qr {
+  max-width: 440px;
+  border-radius: 22px;
+}
+/* The corner finder replaces the shared progress line as the per-second timer. */
+.ls-qr .tick {
+  display: none;
+}
+/* Lift, fall and turn a quarter, land with a little squash. A square a quarter turned
+   looks the same, so each loop picks up where the last ended. */
+.live-finder[data-turning] {
+  animation: finder-turn 1s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+@keyframes finder-turn {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+  30% {
+    transform: translateY(-8px) rotate(0deg);
+  }
+  72% {
+    transform: translateY(2px) rotate(90deg) scale(1, 0.9);
+  }
+  86% {
+    transform: translateY(-1px) rotate(90deg) scale(1.02);
+  }
+  100% {
+    transform: translateY(0) rotate(90deg);
+  }
+}
+.ls-idle {
+  align-self: center;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: var(--s4);
+  width: 100%;
+  max-width: 440px;
+  aspect-ratio: 1;
+  padding: var(--s5);
+  border: 2px dashed rgb(255 255 255 / 0.35);
+  border-radius: 22px;
+  color: #cfcfcf;
+  text-align: center;
+}
+.ls-tools {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin-top: var(--s2);
+  padding-top: var(--s4);
+  border-top: 1px solid rgb(255 255 255 / 0.18);
+}
+.ls-link {
+  color: #cfcfcf;
+  font-size: var(--text-sm);
+}
+.btn-outline-light[disabled] {
+  opacity: 0.4;
+}
+/* Projected: only the QR and its timer, as big as the screen allows. */
+.ls-stage:fullscreen {
+  justify-content: center;
+  align-items: center;
+  border-radius: 0;
+}
+.ls-stage:fullscreen .ls-tools {
+  display: none;
+}
+.ls-stage:fullscreen .ls-qr {
+  align-self: center;
+  width: min(82vh, 92vw);
+}
+.ls-stage:fullscreen .qr {
+  max-width: none;
+}
+.ls-stage:fullscreen .live-finder {
+  top: 40px;
+  right: 40px;
+  width: 64px;
+  height: 64px;
+  border-width: 7px;
+  border-radius: 18px;
+}
+.ls-stage:fullscreen .live-finder::after {
+  inset: 9px;
+  border-radius: 5px;
+}
+.ls-side {
+  gap: var(--s5);
+}
+.ls-of {
+  font-size: 1.125rem;
+  color: var(--si-muted);
+}
+.ls-phones {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ls-phone {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3) var(--s2) var(--s2);
+  border-radius: 20px;
+  background: var(--si-white);
+}
+.ls-phone[data-flag] {
+  box-shadow: inset 0 0 0 1.5px var(--warn);
+}
+.ls-tab {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--si-ink);
+  color: var(--si-white);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.ls-phone .pill-warn {
+  margin-left: auto;
+}
+@media (max-width: 899px) {
+  .ls-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Sign-in: monochrome on a faint topographic backdrop. Desktop: tab card on the
+   left, line portrait on the right. Below 900px: one card with a dark header. */
+.signin {
+  --focus: var(--si-ink);
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  min-height: 100dvh;
+  background: var(--si-white) url("/topo.svg") center / cover no-repeat;
+}
+.signin-main {
+  display: grid;
+  place-items: center;
+  padding: var(--s7) var(--s4);
+}
+.signin-sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 460px);
+  /* Shadow follows the card silhouette, curves included. */
+  filter: drop-shadow(0 24px 48px rgb(0 0 0 / 0.08)) drop-shadow(0 2px 6px rgb(0 0 0 / 0.06));
+}
+.signin-tabrow {
+  display: flex;
+  align-items: center;
+}
+/* Sits on the page beside the tab, clear of its concave corner. */
+.signin-name {
+  margin-left: calc(var(--si-round) + var(--s2));
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--si-ink);
+}
+.signin-tab {
+  position: relative;
+  padding: var(--s4) var(--s5) var(--s3);
+  background: var(--si-white);
+  border-radius: var(--si-round) var(--si-round) 0 0;
+}
+/* Concave curve where the tab flows into the card. */
+.signin-tab::after {
+  content: "";
+  position: absolute;
+  left: 100%;
+  bottom: 0;
+  width: var(--si-round);
+  height: var(--si-round);
+  background: radial-gradient(circle at 100% 0, transparent calc(var(--si-round) - 0.5px), var(--si-white) var(--si-round));
+}
+.signin-logo {
+  display: block;
+  width: 39px;
+  height: 40px;
+}
+.signin-head {
+  position: relative;
+  padding: var(--s6) clamp(20px, 4vw, 40px) 0;
+  text-align: center;
+  background: var(--si-white);
+  border-radius: 0 var(--si-round) 0 0;
+}
+.signin-title {
+  font-weight: 700;
+  font-size: clamp(2rem, 3.4vw, 2.5rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--si-ink);
+}
+.signin-lede {
+  margin-top: var(--s2);
+  color: var(--si-muted);
+}
+.signin-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s5) clamp(20px, 4vw, 40px) var(--s6);
+  background: var(--si-white);
+  border-radius: 0 0 var(--si-round) var(--si-round);
+}
+.signin-panel > * {
+  width: 100%;
+  max-width: 440px;
+}
+/* Small screens only: replaces the tab as the logo holder. */
+.signin-brand {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  min-height: 52px;
+  margin-bottom: var(--s2);
+  border: 1.5px solid var(--si-outline);
+  border-radius: 999px;
+  font-weight: 600;
+  color: var(--si-ink);
+}
+.signin-brand img {
+  display: block;
+  width: 27px;
+  height: 28px;
+}
+/* Hit area is just the text, right-aligned under the 440px field column. */
+.signin-panel > .signin-forgot {
+  align-self: flex-end;
+  width: auto;
+  margin-right: max(0px, calc((100% - 440px) / 2));
+}
+.signin-forgot {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-block: calc(var(--s2) * -1);
+  padding-right: var(--s4);
+  color: var(--si-ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+.signin-forgot:hover {
+  text-decoration: underline;
+}
+.signin-panel .btn-ink {
+  margin-top: var(--s2);
+}
+.btn-ink {
+  min-height: 52px;
+  border-radius: 999px;
+  background: var(--si-ink);
+  border-color: var(--si-ink);
+  color: var(--si-white);
+}
+.btn-ink:hover {
+  background: var(--si-ink-hover);
+  border-color: var(--si-ink-hover);
+}
+.signin-art {
+  display: grid;
+  place-items: center;
+  /* Fade the contours out behind the portrait so its line reads cleanly. */
+  background: radial-gradient(closest-side, var(--si-white) 70%, transparent);
+  padding: 6dvh 4vw;
+  overflow: hidden;
+}
+.signin-face {
+  width: 100%;
+  height: 100%;
+  max-height: 90dvh;
+}
+/* Small screens: one full-viewport page. Dark header with the contours on top,
+   white panel running to the bottom. No floating card. */
+@media (max-width: 899px) {
+  .signin {
+    grid-template-columns: 1fr;
+    background: var(--si-white);
+  }
+  .signin-main {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+  }
+  .signin-art,
+  .signin-tabrow {
+    display: none;
+  }
+  .signin-sheet {
+    flex: 1;
+    width: 100%;
+    filter: none;
+  }
+  .signin-head {
+    overflow: hidden;
+    padding: calc(env(safe-area-inset-top) + 72px) var(--s5) calc(var(--s7) + var(--si-round));
+    background: var(--si-ink);
+    border-radius: 0;
+  }
+  /* Same contours (light lines) as texture in the dark header. */
+  .signin-head::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: url("/topo.svg") center / cover no-repeat;
+    opacity: 0.28;
+  }
+  .signin-title {
+    position: relative;
+    color: var(--si-white);
+  }
+  .signin-lede {
+    position: relative;
+    color: #d0d0d0;
+  }
+  .signin-panel {
+    flex: 1;
+    margin-top: calc(var(--si-round) * -1);
+    padding: var(--s5) var(--s5) calc(env(safe-area-inset-bottom) + var(--s6));
+    border-radius: var(--si-round) var(--si-round) 0 0;
+  }
+  .signin-brand {
+    display: flex;
+  }
+}
+
+/* Pill fields: soft grey, leading icon, label floats up once typing starts. */
+.pill-field {
+  position: relative;
+  height: 60px;
+  border-radius: 999px;
+  background: var(--si-field);
+  overflow: hidden;
+  text-align: left;
+  transition:
+    background-color 200ms ease,
+    box-shadow 200ms ease;
+}
+.pill-field:focus-within {
+  background: var(--si-field-focus);
+  box-shadow: inset 0 0 0 1.5px var(--si-ink);
+}
+.pill-field:has(:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.pill-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0 var(--s5) 0 52px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--si-ink);
+  outline: none;
+}
+.pill-input:not(:placeholder-shown) {
+  padding-top: 18px;
+}
+.pill-label {
+  position: absolute;
+  left: 52px;
+  top: 50%;
+  translate: 0 -50%;
+  color: var(--si-placeholder);
+  pointer-events: none;
+  transform-origin: left center;
+  transition:
+    top 220ms cubic-bezier(0.65, 0, 0.35, 1),
+    scale 220ms cubic-bezier(0.65, 0, 0.35, 1);
+}
+.pill-input:not(:placeholder-shown) ~ .pill-label {
+  top: 17px;
+  scale: 0.75;
+}
+.pill-icon {
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  margin-top: -10px;
+  fill: none;
+  stroke: var(--si-placeholder);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke 250ms ease;
+}
+.pill-field:focus-within .pill-icon {
+  stroke: var(--si-ink);
+}
+/* Separate end segment, split from the field by a white gap. */
+.pill-eye {
+  position: absolute;
+  inset: 0 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  border: 0;
+  border-left: 2px solid var(--si-white);
+  border-radius: 0 999px 999px 0;
+  background: transparent;
+  color: var(--si-ink);
+  cursor: pointer;
+}
+.pill-eye:hover {
+  background: rgb(0 0 0 / 0.05);
+}
+.pill-eye:focus-visible {
+  outline-offset: -5px;
+}
+.pill-eye svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* QR password field: see components/QrPasswordField.tsx. Typed characters show as
+   QR glyphs instead of dots, unless the eye toggle reveals the text. */
+.qr-field .pill-input {
+  padding-right: 68px;
+  color: transparent;
+  caret-color: transparent;
+}
+.qr-field[data-shown] .pill-input {
+  color: var(--si-ink);
+  caret-color: var(--si-ink);
+}
+.qr-field[data-shown] .qr-glyphs {
+  display: none;
+}
+/* Leading finder square: spins into place on focus. */
+.qr-finder {
+  position: absolute;
+  left: 22px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  border: 2.5px solid var(--si-placeholder);
+  border-radius: 5px;
+  transition:
+    border-color 250ms ease,
+    transform 500ms cubic-bezier(0.65, 0, 0.35, 1);
+}
+.qr-finder::after {
+  content: "";
+  position: absolute;
+  inset: 2.5px;
+  border-radius: 1.5px;
+  background: var(--si-placeholder);
+  transition: background-color 250ms ease;
+}
+.qr-field:focus-within .qr-finder,
+.qr-field:has(.pill-input:not(:placeholder-shown)) .qr-finder {
+  border-color: var(--si-ink);
+}
+.qr-field:focus-within .qr-finder::after,
+.qr-field:has(.pill-input:not(:placeholder-shown)) .qr-finder::after {
+  background: var(--si-ink);
+}
+.qr-field:focus-within .qr-finder {
+  transform: rotate(90deg);
+}
+.qr-glyphs {
+  position: absolute;
+  inset: 0 68px 0 47px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.qr-field:has(.pill-input:not(:placeholder-shown)) .qr-glyphs {
+  top: 18px;
+}
+.qr-glyph {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+.qr-glyph rect {
+  fill: var(--si-ink);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: qr-pop 280ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+@keyframes qr-pop {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+}
+.qr-caret {
+  flex: none;
+  width: 2px;
+  height: 18px;
+  margin-left: 2px;
+  background: var(--si-ink);
+  opacity: 0;
+}
+.qr-field:focus-within .qr-caret {
+  animation: qr-blink 1.1s steps(2, jump-none) infinite;
+}
+@keyframes qr-blink {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Line portrait: see components/FaceLine.tsx. Each cycle the line is drawn by a
+   "shooting star" head with a fading tail, holds, then fades for the next pass. */
+.face-blob {
+  fill: #e3e3e3;
+}
+.face-dot {
+  fill: #cfcfcf;
+}
+.face-pattern {
+  fill: none;
+  stroke: #555555;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.face-finder-ring {
+  fill: none;
+  stroke: #333333;
+  stroke-width: 4;
+}
+.face-finder-eye {
+  fill: #333333;
+}
+.face-ghost,
+.face-line,
+.face-star {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.face-ghost {
+  stroke: #dcdcdc;
+  stroke-width: 2;
+}
+.face-line {
+  stroke: #333333;
+  stroke-width: 2.6;
+  stroke-dasharray: 1000 1000;
+}
+.face-star {
+  stroke: var(--si-ink);
+  opacity: 0;
+}
+/* Starts once the load splash reveals the page (FaceLine adds .face-drawing). */
+.face-drawing .face-fill {
+  animation: face-fill 11s ease infinite;
+}
+.face-drawing .face-line {
+  animation: face-draw 11s cubic-bezier(0.45, 0.05, 0.4, 1) infinite;
+}
+.face-drawing .face-star-tail {
+  animation: face-star-tail 11s cubic-bezier(0.45, 0.05, 0.4, 1) infinite;
+}
+.face-drawing .face-star-mid {
+  animation: face-star-mid 11s cubic-bezier(0.45, 0.05, 0.4, 1) infinite;
+}
+.face-drawing .face-star-head {
+  animation: face-star-head 11s cubic-bezier(0.45, 0.05, 0.4, 1) infinite;
+}
+.face-star-tail {
+  stroke-dasharray: 160 3000;
+  stroke-width: 3;
+  stroke-opacity: 0.18;
+}
+.face-star-mid {
+  stroke-dasharray: 40 3000;
+  stroke-width: 4.5;
+  stroke-opacity: 0.5;
+}
+.face-star-head {
+  stroke-dasharray: 5 3000;
+  stroke-width: 8;
+  filter: drop-shadow(0 0 6px rgb(0 0 0 / 0.45));
+}
+@keyframes face-draw {
+  0% {
+    stroke-dashoffset: 1000;
+    opacity: 1;
+  }
+  38% {
+    stroke-dashoffset: 0;
+  }
+  82% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  92%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+/* The QR fill settles in once the line has been drawn, and leaves with it. */
+@keyframes face-fill {
+  0%,
+  34% {
+    opacity: 0;
+  }
+  46%,
+  82% {
+    opacity: 1;
+  }
+  92%,
+  100% {
+    opacity: 0;
+  }
+}
+/* Star layers: a dash of length d rides the draw front when dashoffset = d - progress. */
+@keyframes face-star-tail {
+  0% {
+    stroke-dashoffset: 160;
+    opacity: 1;
+  }
+  38% {
+    stroke-dashoffset: -840;
+    opacity: 1;
+  }
+  44%,
+  100% {
+    stroke-dashoffset: -840;
+    opacity: 0;
+  }
+}
+@keyframes face-star-mid {
+  0% {
+    stroke-dashoffset: 40;
+    opacity: 1;
+  }
+  38% {
+    stroke-dashoffset: -960;
+    opacity: 1;
+  }
+  44%,
+  100% {
+    stroke-dashoffset: -960;
+    opacity: 0;
+  }
+}
+@keyframes face-star-head {
+  0% {
+    stroke-dashoffset: 5;
+    opacity: 1;
+  }
+  38% {
+    stroke-dashoffset: -995;
+    opacity: 1;
+  }
+  44%,
+  100% {
+    stroke-dashoffset: -995;
+    opacity: 0;
+  }
+}
+
+/* Load splash: see components/Splash.tsx. Black and white on purpose. */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #fff;
+  transition-property: background-color;
+  /* Failsafe if JS never runs */
+  animation: splash-out 300ms 9s forwards;
+}
+.splash[data-phase="fly"] {
+  background-color: transparent;
+  pointer-events: none;
+}
+.splash-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.splash-ink {
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+}
+@keyframes splash-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+.page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--s6) var(--s4) var(--s7);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+}
+.page-narrow {
+  max-width: 640px;
+}
+
+/* Rotating QR, shared by the lecturer stage and the student node screen. */
+.qr {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: var(--s4);
+  aspect-ratio: 1;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+}
+.qr svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.tick {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--brand-soft);
+  overflow: hidden;
+}
+.tick span {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+  animation: tick 1s linear infinite;
+  transform-origin: left;
+}
+@keyframes tick {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Student phone shell: same monochrome tokens as the lecturer shell, white page,
+   pill fields and black pill buttons. Header shows the logo, course and step bar. */
+.phone {
+  --focus: var(--si-ink);
+  --ink: var(--si-ink);
+  --ink-2: var(--si-muted);
+  --line: var(--si-outline);
+  --paper: var(--si-soft);
+  --surface: var(--si-white);
+  --brand: var(--si-ink);
+  --brand-press: var(--si-ink-hover);
+  --brand-soft: var(--si-soft);
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  max-width: 480px;
+  margin: 0 auto;
+  background: var(--si-white);
+  color: var(--si-ink);
+}
+body:has(.phone) {
+  background: var(--si-white);
+}
+.phone h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.phone-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: var(--s4) var(--s4) var(--s3);
+  background: var(--si-white);
+}
+.phone-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 36px;
+}
+.phone-brand img {
+  display: block;
+  width: 27px;
+  height: 28px;
+}
+.phone-title {
+  flex: 1;
+  font-weight: 600;
+}
+.phone-body {
+  flex: 1;
+  padding: var(--s4) var(--s4) var(--s5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+.phone-foot {
+  position: sticky;
+  bottom: 0;
+  padding: var(--s3) var(--s4) calc(var(--s4) + env(safe-area-inset-bottom));
+  background: var(--si-white);
+  box-shadow: 0 -12px 24px rgb(255 255 255 / 0.9);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+.phone .btn-block {
+  min-height: 56px;
+}
+/* Info notices are neutral grey; only errors keep a colour. */
+.phone .notice {
+  border-radius: 18px;
+  background: var(--si-soft);
+  color: var(--si-ink);
+  font-size: var(--text-sm);
+}
+.phone .notice-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.steps {
+  display: flex;
+  gap: 6px;
+  margin-top: var(--s3);
+}
+.steps span {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--si-field);
+  transition: background-color 300ms ease;
+}
+.steps span[data-done="true"] {
+  background: var(--si-ink);
+}
+/* Centred status: a black circle with the icon, then the words. */
+.phone-state {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.phone-state .notice {
+  text-align: left;
+}
+.state-icon {
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  margin-bottom: var(--s2);
+  border-radius: 50%;
+  background: var(--si-ink);
+  color: var(--si-white);
+}
+.state-icon svg {
+  width: 40px;
+  height: 40px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* The tick draws itself in once. */
+.state-icon[data-icon="check"] path {
+  stroke-dasharray: 24;
+  animation: draw-check 500ms 150ms cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+@keyframes draw-check {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Camera */
+.camera {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: var(--si-round);
+  overflow: hidden;
+  background: var(--si-ink);
+  color: #e4e4e4;
+}
+.camera video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.camera-mirror video {
+  transform: scaleX(-1);
+}
+.camera-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--s5);
+  text-align: center;
+}
+.frame-qr {
+  position: absolute;
+  inset: 22% 14%;
+  border: 3px solid #fff;
+  border-radius: 22px;
+  box-shadow: 0 0 0 999px rgb(0 0 0 / 0.5);
+}
+.frame-face {
+  position: absolute;
+  inset: 12% 16% 18%;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 999px rgb(0 0 0 / 0.55);
+  transition: border-width 250ms ease;
+}
+/* Checking: a thicker ring rather than a colour, to stay in the monochrome system. */
+.frame-face[data-state="ok"] {
+  border-width: 7px;
+}
+.camera-caption {
+  position: absolute;
+  left: var(--s4);
+  right: var(--s4);
+  bottom: var(--s4);
+  padding: var(--s3) var(--s4);
+  border-radius: 999px;
+  background: var(--si-white);
+  color: var(--si-ink);
+  text-align: center;
+  font-weight: 600;
+}
+.face-tips {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding-left: var(--s5);
+  color: var(--si-muted);
+  font-size: var(--text-sm);
+}
+
+/* Registration: a roster field picked from the list, masked, with a Change segment. */
+.pill-locked .pill-value {
+  position: absolute;
+  inset: 0 96px 0 52px;
+  display: flex;
+  align-items: center;
+  padding-top: 18px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pill-locked .pill-label {
+  top: 17px;
+  scale: 0.75;
+}
+.pill-change {
+  width: 92px;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.suggest {
+  list-style: none;
+  margin: 0;
+  padding: var(--s2);
+  border-radius: 22px;
+  background: var(--si-white);
+  box-shadow:
+    0 12px 32px rgb(0 0 0 / 0.14),
+    0 2px 6px rgb(0 0 0 / 0.06);
+}
+.suggest button {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 var(--s3);
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--si-ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.suggest button:hover {
+  background: var(--si-soft);
+}
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  min-height: 48px;
+  padding: var(--s3) var(--s4);
+  border-radius: 18px;
+  background: var(--si-soft);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.consent input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  accent-color: var(--si-ink);
+}
+
+/* Shared bits for the redesigned pages. */
+.pill-ink {
+  background: var(--si-ink);
+  border-color: var(--si-ink);
+  color: var(--si-white);
+}
+.btn-sm.btn-outline {
+  min-height: 44px;
+}
+.btn-reject {
+  color: var(--danger);
+}
+.btn-reject:hover {
+  border-color: var(--danger);
+}
+.btn-ink[disabled] {
+  opacity: 0.35;
+}
+
+/* Approvals: see app/lecturer/approvals/page.tsx. */
+.ap-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s5);
+  border: 1.5px solid var(--si-outline);
+  border-radius: var(--si-round);
+  scroll-margin-top: var(--s4);
+}
+.ap-card:target {
+  border-color: var(--si-ink);
+}
+.ap-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+.ap-person {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+.ap-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--si-ink);
+  color: var(--si-white);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+/* Two people with the match score between them. */
+.ap-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3);
+  border-radius: 22px;
+  background: var(--si-soft);
+}
+.ap-match {
+  display: grid;
+  place-items: center;
+  padding: var(--s2) var(--s3);
+  border-radius: 999px;
+  background: var(--si-white);
+  font-size: 0.75rem;
+  color: var(--si-muted);
+  line-height: 1.2;
+  text-align: center;
+}
+.ap-match strong {
+  font-size: 1.125rem;
+  color: var(--si-ink);
+}
+.ap-drop {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 60px;
+  padding: 0 var(--s5);
+  border: 1.5px dashed var(--si-outline);
+  border-radius: 999px;
+  color: var(--si-muted);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 200ms ease;
+}
+.ap-drop:hover,
+.ap-drop:has(:focus-visible) {
+  border-color: var(--si-ink);
+}
+.ap-drop[data-filled] {
+  border-style: solid;
+  border-color: var(--si-ink);
+  color: var(--si-ink);
+}
+.ap-drop svg,
+.ap-changes svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ap-changes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin: 0;
+}
+.ap-changes > div {
+  display: grid;
+  gap: 2px;
+  padding: var(--s3) var(--s4);
+  border-radius: 18px;
+  background: var(--si-soft);
+}
+.ap-changes dt {
+  font-size: 0.75rem;
+  color: var(--si-muted);
+}
+.ap-changes dd {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.ap-changes s {
+  color: var(--si-muted);
+}
+.ap-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--s3);
+}
+@media (max-width: 599px) {
+  .ap-pair {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+  }
+  .ap-actions .btn {
+    flex: 1 1 100%;
+  }
+}
+
+/* Course results and roster: see app/lecturer/courses/[id]/CourseView.tsx. */
+.lect .segmented {
+  min-width: 260px;
+  padding: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--si-soft);
+}
+.lect .segmented button {
+  min-height: 44px;
+  border-radius: 999px;
+}
+.lect .segmented button[aria-pressed="true"] {
+  background: var(--si-ink);
+  color: var(--si-white);
+}
+.cv-facts {
+  max-width: 520px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.cv-cell {
+  padding: 4px;
+  text-align: center;
+}
+.cell-mark {
+  display: inline-grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--si-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cell-mark span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  transition:
+    background-color 200ms ease,
+    color 200ms ease;
+}
+.cell-mark[aria-pressed="true"] span {
+  background: var(--si-ink);
+  color: var(--si-white);
+}
+.cell-mark:hover span {
+  box-shadow: 0 0 0 2px var(--si-outline);
+}
+.cv-rate {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-variant-numeric: tabular-nums;
+}
+.cv-rate .bar {
+  width: 56px;
+  height: 6px;
+}
+.lect th {
+  background: var(--si-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .btn:active {
+    transform: none;
+  }
+  .splash {
+    display: none;
+  }
+}
