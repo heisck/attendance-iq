@@ -114,14 +114,18 @@ def analyze(m: Models, frames: list[bytes], challenge: list[str]) -> dict:
     pitch0 = np.mean([s["pitch"] for s in center])
 
     # Frames come straight from the camera (not mirrored): turning to the subject's left moves the nose to image right.
+    # How far each step moved (its best frame) against what it needs. On failure the numbers go back for tuning.
     moved = {
-        "center": lambda s: True,
-        "left": lambda s: s["yaw"] - yaw0 > TURN,
-        "right": lambda s: yaw0 - s["yaw"] > TURN,
-        "up": lambda s: pitch0 - s["pitch"] > TILT,
+        "left": lambda s: s["yaw"] - yaw0,
+        "right": lambda s: yaw0 - s["yaw"],
+        "up": lambda s: pitch0 - s["pitch"],
     }
-    if not all(any(moved[kind](s) for s in step) for step, kind in zip(steps, challenge)):
-        return {"ok": False, "reason": "challenge"}
+    need = {"left": TURN, "right": TURN, "up": TILT}
+    best = {kind: round(max(moved[kind](s) for s in step), 3) for step, kind in zip(steps, challenge) if kind != "center"}
+    if not all(best[k] > need[k] for k in best):
+        # Every frame's yaw/pitch in step order, so a bad "center" baseline shows up too.
+        frames = " ".join(f"{kind}:{s['yaw']:+.2f}/{s['pitch']:.2f}" for step, kind in zip(steps, challenge) for s in step)
+        return {"ok": False, "reason": "challenge", "detail": {**{k: f"{v} of {need[k]}" for k, v in best.items()}, "frames": frames}}
 
     emb = np.mean([s["emb"] for s in center], axis=0)
     emb = emb / np.linalg.norm(emb)

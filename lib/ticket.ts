@@ -38,7 +38,7 @@ export async function redeemTicket(ticket: string, sessionId: string): Promise<T
 export const endTicket = (ticket: string) => redis().del(`t:${ticket}`);
 
 export const FACE_ERRORS = {
-  no_face: "We lost your face partway. Hold the phone at arm's length in good light and try again.",
+  no_face: "We lost your face partway. Keep your face filling the oval, in good light, and try again.",
   challenge: "We couldn't see you follow the moves. Try again, turning a bit further each time.",
   same_face: "A different face appeared during the check. One person at a time, please.",
   spoof: "That looked like a photo or a screen. Use your own face, live.",

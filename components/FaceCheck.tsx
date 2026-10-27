@@ -12,16 +12,22 @@ const LABEL: Record<Step, string> = {
   right: "Turn your head right",
   up: "Look up",
 };
-const STEP_MS = 1600;
-const CAPTURE_AT = [800, 1400]; // ms into each step, one per frame
-const WIDTH = 360;
+// People need ~1 s to read an instruction and move, so frames are taken late in each step.
+const STEP_MS = 2200;
+const CAPTURE_AT = [1200, 1900]; // ms into each step, one per frame
+const WIDTH = 300;
+const HEIGHT = 400; // 3:4, like the .camera preview
 const QUALITY = 0.75;
 
+// Sends what the preview shows: its 3:4 centre (object-fit: cover). Sending the whole frame shrank a
+// face that fills the oval on a 16:9 webcam below the face service's MIN_FACE.
 function grab(v: HTMLVideoElement) {
+  const sw = Math.min(v.videoWidth, (v.videoHeight * WIDTH) / HEIGHT);
+  const sh = Math.min(v.videoHeight, (v.videoWidth * HEIGHT) / WIDTH);
   const c = document.createElement("canvas");
   c.width = WIDTH;
-  c.height = Math.round((WIDTH / v.videoWidth) * v.videoHeight);
-  c.getContext("2d")!.drawImage(v, 0, 0, c.width, c.height);
+  c.height = HEIGHT;
+  c.getContext("2d")!.drawImage(v, (v.videoWidth - sw) / 2, (v.videoHeight - sh) / 2, sw, sh, 0, 0, WIDTH, HEIGHT);
   return c.toDataURL("image/jpeg", QUALITY).split(",")[1];
 }
 
@@ -57,12 +63,21 @@ export function FaceCheck({ challenge, onFrames }: { challenge: Step[]; onFrames
   }
 
   const caption = step < 0 ? "Fit your face in the oval" : step < challenge.length ? LABEL[challenge[step]] : "Checking…";
+  const move = step >= 0 && step < challenge.length && challenge[step] !== "center" ? challenge[step] : null;
 
   return (
     <>
       <div className="phone-body">
         <Camera facing="user" video={video}>
           <div className="frame-face" data-state={step >= challenge.length ? "ok" : undefined} />
+          {/* The preview is a mirror: turning to your left moves your reflection to the screen's left. */}
+          {move && (
+            <span key={step} className="face-arrow" data-dir={move} aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M19 12H5M11 6l-6 6 6 6" />
+              </svg>
+            </span>
+          )}
           <p className="camera-caption" aria-live="polite">
             {caption}
           </p>

@@ -7,10 +7,11 @@ import type { Step } from "./schemas";
 // SFace cosine similarity at or above this = same person (OpenCV's published threshold).
 export const MATCH = 0.363;
 
+// Straight on, then both turns in random order. "up" stays supported by the face service but isn't asked:
+// landmark pitch barely moves on a natural look-up (real attempts measured 0.04-0.08 of the 0.10 needed),
+// while turns register several times over.
 export function pickChallenge(): Step[] {
-  const moves: Step[] = ["left", "right", "up"];
-  const first = moves.splice(Math.floor(Math.random() * 3), 1)[0];
-  return ["center", first, moves[Math.floor(Math.random() * 2)]];
+  return Math.random() < 0.5 ? ["center", "left", "right"] : ["center", "right", "left"];
 }
 
 export type FaceResult = { ok: true; embedding: Float32Array } | { ok: false; reason: "no_face" | "challenge" | "same_face" | "spoof" };
@@ -30,7 +31,9 @@ async function call(body: object) {
 
 export async function checkFace(challenge: Step[], frames: string[]): Promise<FaceResult> {
   const r = await call({ challenge, frames });
-  return r.ok ? { ok: true, embedding: fromBase64(r.embedding) } : r;
+  // Numbers only (how far each move got), for tuning TURN / TILT in face/app.py. No images are kept.
+  if (!r.ok) console.warn(`face check failed: ${r.reason}${r.detail ? ` ${JSON.stringify(r.detail)}` : ""}`);
+  return r.ok ? { ok: true, embedding: fromBase64(r.embedding) } : { ok: false, reason: r.reason };
 }
 
 // Wakes a container when the lecturer presses Start, so the first student doesn't wait on a cold start.

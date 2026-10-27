@@ -55,4 +55,4 @@ FACE_URL=... FACE_TOKEN_ID=... FACE_TOKEN_SECRET=... python face/loadtest.py fac
 
 ## Tuning the face check
 
-Knobs at the top of `face/app.py`: `TURN` and `TILT` (how far students must move), `SAME_FACE`, `REAL` (anti-spoof) and `MIN_FACE`. The match threshold is `MATCH` in `lib/face.ts` (OpenCV's published SFace value). Test `face/app.py` against photos without Modal: `python face/app.py <models dir> img1.jpg img2.jpg`.
+A failed movement check logs how far each move got, e.g. `face check failed: challenge {"left":"0.12 of 0.18","right":"0.31 of 0.18","frames":"center:+0.02/0.55 ..."}` (every frame's yaw/pitch) (numbers only, no images); use these to tune. Knobs at the top of `face/app.py`: `TURN` and `TILT` (how far students must move), `SAME_FACE`, `REAL` (anti-spoof) and `MIN_FACE`. The match threshold is `MATCH` in `lib/face.ts` (OpenCV's published SFace value). Test `face/app.py` against photos without Modal: `python face/app.py <models dir> img1.jpg img2.jpg`.

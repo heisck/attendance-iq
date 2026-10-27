@@ -2474,6 +2474,51 @@ body:has(.phone) {
 .frame-face[data-state="ok"] {
   border-width: 7px;
 }
+/* Face check: which way to move, beside the oval, nudging that way. */
+.face-arrow {
+  --nudge: -6px 0;
+  position: absolute;
+  top: calc(47% - 26px);
+  left: 3%;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--si-white);
+  color: var(--si-ink);
+  animation: face-nudge 900ms ease-in-out infinite;
+}
+.face-arrow svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.face-arrow[data-dir="right"] {
+  --nudge: 6px 0;
+  left: auto;
+  right: 3%;
+}
+.face-arrow[data-dir="right"] svg {
+  transform: scaleX(-1);
+}
+.face-arrow[data-dir="up"] {
+  --nudge: 0 -6px;
+  top: 2%;
+  left: calc(50% - 26px);
+}
+.face-arrow[data-dir="up"] svg {
+  transform: rotate(90deg);
+}
+@keyframes face-nudge {
+  50% {
+    translate: var(--nudge);
+  }
+}
 .camera-caption {
   position: absolute;
   left: var(--s4);

@@ -68,7 +68,7 @@ Chain depth is unlimited. The rotating code is what protects it.
 
 All on the server (Modal). The phone only captures frames.
 
-1. The server sends a random challenge (e.g. "turn left, then blink").
+1. The server sends a random challenge: look straight, then turn left and right in random order. ("Look up" is supported but not asked: head tilt barely registers from face landmarks.)
 2. The phone uploads 5–8 small frames (~20 KB each) with the scan ticket. This endpoint's body limit is ~300 KB; every other endpoint uses the default 32 KB.
 3. The server checks that:
    - the movement matches the challenge,
