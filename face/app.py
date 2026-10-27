@@ -26,6 +26,13 @@ TILT = 0.10  # nose shift up, in eye-to-mouth heights, for "up"
 SAME_FACE = 0.20  # min cosine between any frame and the center embedding (lower than a match: turned heads score worse)
 REAL = 0.50  # min mean anti-spoof "real" probability across frames
 MIN_FACE = 80  # px; smaller faces are too far away to judge
+# Continuity: small snapshots every ~200 ms through the whole check must show one face that never leaves
+# and never jumps, so swapping photos of someone (left, right, ...) in front of the camera fails.
+TRACK_GAP = 1  # snapshots in a row allowed without a face (a blur); a hand swapping photos hides it longer
+TRACK_SHIFT = 0.3  # max move of the face centre between snapshots, in face widths
+TRACK_SCALE = 1.25  # max change in face size between snapshots
+TRACK_TURN = 0.6  # max yaw change between snapshots (eye distances); a real turn passes through the angles between
+TRACK_SAME = 14.0  # max mean grey-level difference between a frame and the snapshot taken with it (0-255)
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -99,8 +106,66 @@ def frame(m: Models, jpeg: bytes):
     return {"yaw": float(yaw), "pitch": float(pitch), "emb": emb, "real": real}
 
 
-def analyze(m: Models, frames: list[bytes], challenge: list[str]) -> dict:
-    """frames are grouped by challenge step, in order: len(frames) is a multiple of len(challenge)."""
+def decode(jpeg: bytes):
+    return cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
+
+
+def point(m: Models, img):
+    """Where the face is in a snapshot: centre, width (px) and yaw. None without a face."""
+    h, w = img.shape[:2]
+    m.det.setInputSize((w, h))
+    _, faces = m.det.detect(img)
+    if faces is None:
+        return None
+    face = max(faces, key=lambda f: f[2] * f[3])
+    x, y, bw, bh = face[:4]
+    eye_r, eye_l, nose = face[4:10].reshape(3, 2)
+    yaw = (nose[0] - (eye_r[0] + eye_l[0]) / 2) / max(np.linalg.norm(eye_l - eye_r), 1.0)
+    return {"x": float(x + bw / 2), "y": float(y + bh / 2), "w": float(bw), "yaw": float(yaw)}
+
+
+def grey(img, size=(30, 40)):
+    return cv2.resize(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), size, interpolation=cv2.INTER_AREA).astype(np.float32)
+
+
+def continuity(m: Models, track: list[bytes], frames: list[bytes], marks: list[int]) -> dict | None:
+    """None if the snapshots show one face throughout; else the failure with its numbers."""
+    thumbs = [decode(t) for t in track]
+    if any(t is None for t in thumbs):
+        return {"ok": False, "reason": "continuity", "detail": {"error": "bad snapshot"}}
+    # Each full frame must be the very picture its snapshot was taken from.
+    same = max(float(np.abs(grey(decode(f)) - grey(thumbs[i])).mean()) for f, i in zip(frames, marks))
+    pts = [point(m, t) for t in thumbs]
+    gap = run = 0
+    for p in pts:
+        run = 0 if p else run + 1
+        gap = max(gap, run)
+    # Each found face against the previous found one; limits scale with the snapshots between them.
+    shift = scale = turn = 0.0
+    prev = None
+    for i, p in enumerate(pts):
+        if not p:
+            continue
+        if prev:
+            j, q = prev
+            k = i - j
+            shift = max(shift, float(np.hypot(p["x"] - q["x"], p["y"] - q["y"]) / ((p["w"] + q["w"]) / 2) / k))
+            scale = max(scale, (max(p["w"], q["w"]) / min(p["w"], q["w"])) ** (1 / k))
+            turn = max(turn, abs(p["yaw"] - q["yaw"]) / k)
+        prev = (i, p)
+    detail = {"gap": gap, "shift": round(shift, 2), "scale": round(scale, 2), "turn": round(turn, 2), "same": round(same, 1)}
+    if gap > TRACK_GAP or shift > TRACK_SHIFT or scale > TRACK_SCALE or turn > TRACK_TURN or same > TRACK_SAME:
+        return {"ok": False, "reason": "continuity", "detail": detail}
+    return None
+
+
+def analyze(m: Models, frames: list[bytes], challenge: list[str], track: list[bytes] | None = None, marks: list[int] | None = None) -> dict:
+    """frames are grouped by challenge step, in order: len(frames) is a multiple of len(challenge).
+    track/marks: the snapshots and which snapshot each frame was taken with (required by the endpoint)."""
+    if track is not None:
+        broken = continuity(m, track, frames, marks)
+        if broken:
+            return broken
     per = len(frames) // len(challenge)
     seen = [frame(m, f) for f in frames]
     if any(s is None for s in seen):
@@ -147,7 +212,8 @@ class Face:
         cv2.setNumThreads(1)
         models()
 
-    # POST {challenge: ["center", "left", ...], frames: [base64 jpeg, ...]} -> {ok, reason?, embedding?}
+    # POST {challenge: ["center", "left", ...], frames: [base64 jpeg, ...], track: [base64 jpeg, ...],
+    #       marks: [track index per frame]} -> {ok, reason?, detail?, embedding?}
     # POST {warm: true} wakes a container when the lecturer presses Start.
     # Modal's proxy auth rejects calls without the workspace's Modal-Key/Modal-Secret headers before
     # any container starts, so strangers can't spend the credits.
@@ -155,7 +221,7 @@ class Face:
     def check(self, body: dict):
         if body.get("warm"):
             return {"ok": True}
-        challenge, frames = body.get("challenge"), body.get("frames")
+        challenge, frames, track, marks = body.get("challenge"), body.get("frames"), body.get("track"), body.get("marks")
         if (
             not isinstance(challenge, list)
             or not 1 <= len(challenge) <= 4
@@ -164,9 +230,16 @@ class Face:
             or not 1 <= len(frames) <= 12
             or len(frames) % len(challenge)
             or any(not isinstance(f, str) or len(f) > 100_000 for f in frames)
+            or not isinstance(track, list)
+            or not 10 <= len(track) <= 40
+            or any(not isinstance(t, str) or len(t) > 100_000 for t in track)
+            or not isinstance(marks, list)
+            or len(marks) != len(frames)
+            or any(not isinstance(i, int) or not 0 <= i < len(track) for i in marks)
         ):
             raise HTTPException(400)
-        return analyze(models(), [base64.b64decode(f) for f in frames], challenge)
+        b64 = base64.b64decode
+        return analyze(models(), [b64(f) for f in frames], challenge, [b64(t) for t in track], marks)
 
 
 if __name__ == "__main__":

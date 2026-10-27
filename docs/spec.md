@@ -61,21 +61,22 @@ Chain depth is unlimited. The rotating code is what protects it.
 - A new code every second. Each code is signed by the server and carries the server's time.
 - **Scanning and submitting are separate.** On scan, the phone sends the code to the server straight away. The server checks that the code was issued ≤3 s ago by its own clock and returns a **scan ticket** (one use, valid ~2 min). The face check then runs at its own pace, and the submit carries the ticket. The phone's clock is never trusted.
 - Nodes fetch codes from the server. They never hold the signing secret (otherwise a student could pass it to an absent friend, who could then make valid codes at home). Codes arrive as a Server-Sent Events stream, one per second, so each screen holds one long response instead of making a request every second.
-- A tab becomes a node by marking someone; the server then gives it a **node token** (signed session + node id). The token lets it stream codes and start the next person's check without scanning.
+- A tab becomes a node by marking someone; the server then gives it a **node token** (signed session + node id). The token lets it stream codes, and keeps every person it marks under the same phone in the lecturer's list. Each of those people still scans a live code first.
 - Making and checking codes is stateless (an HMAC with a server secret), so it costs no Redis calls. Only redeeming a ticket touches Redis.
 
 ## Face + liveness
 
 All on the server (Modal). The phone only captures frames.
 
-1. The server sends a random challenge: look straight, then turn left and right in random order. ("Look up" is supported but not asked: head tilt barely registers from face landmarks.)
-2. The phone uploads 5–8 small frames (~20 KB each) with the scan ticket. This endpoint's body limit is ~300 KB; every other endpoint uses the default 32 KB.
+1. The server sends a random challenge: look straight, then turn left and right in random order. An arrow on the camera view shows which way to turn. ("Look up" is supported but not asked: head tilt barely registers from face landmarks.)
+2. The phone uploads 6 frames (300×400, ~20–30 KB each: the 3:4 area the preview shows) plus a small snapshot every 200 ms for the whole check (~33 × 3–5 KB), with the scan ticket. These endpoints' body limit is ~600 KB; every other endpoint uses the default 32 KB.
 3. The server checks that:
+   - the face never leaves the snapshots and never jumps between them (photos swapped in front of the camera do both), and each frame is the picture its snapshot was taken from,
    - the movement matches the challenge,
    - every frame shows the same face (the person doing the challenge is the person submitting),
    - an anti-spoof model doesn't flag a print or a screen,
    - the face matches the registered embedding (1:1).
-4. Frames are processed in memory and dropped. **Only embeddings are stored. No photos**, except the duplicate-evidence photo, which is deleted after the decision.
+4. Frames are processed in memory and dropped. **Only embeddings are stored. No photos.** (The duplicate-evidence photo stays on the lecturer's device.) Failed checks log numbers only, for tuning.
 
 Duplicate check speed: comparing one embedding against a course's embeddings is a plain loop. 1000 students × 128 floats takes about 1 ms. Each course's embeddings are cached in Upstash. Turso's vector search is the upgrade path if a single deployment ever passes ~50k students.
 

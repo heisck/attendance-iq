@@ -19,20 +19,24 @@ export const loginSchema = z.object({ email: z.string().max(200), password: z.st
 // Face check steps. The server picks "center" plus two others; frames come in step order.
 export const STEPS = ["center", "left", "right", "up"] as const;
 export type Step = (typeof STEPS)[number];
-export const FRAMES_PER_STEP = 2;
-// Base64 JPEGs, ~20-30 KB each.
-const frames = z.array(z.string().max(60_000)).min(2).max(12);
+// Base64 JPEGs: frames ~20-30 KB each; track, a small snapshot every 200 ms (~3-5 KB); marks, the
+// snapshot each frame was taken with.
+const face = {
+  frames: z.array(z.string().max(60_000)).min(2).max(12),
+  track: z.array(z.string().max(12_000)).min(10).max(40),
+  marks: z.array(z.number().int().min(0).max(39)).max(12),
+};
 
 export const ticketSchema = z.object({ code: z.string().max(200).optional(), node: z.string().max(100).optional() });
 
-export const attendSchema = z.object({ ticket: z.string().max(64), indexNo: studentFields.shape.indexNo, frames, ...honeypot });
+export const attendSchema = z.object({ ticket: z.string().max(64), indexNo: studentFields.shape.indexNo, ...face, ...honeypot });
 
 // rosterId: the picked roster entry. fields: only what the student retyped (all four when not on the roster).
 export const registerSchema = z.object({
   ticket: z.string().max(64),
   rosterId: z.string().max(40).optional(),
   fields: studentFields.partial(),
-  frames,
+  ...face,
   ...honeypot,
 });
 

@@ -15,7 +15,7 @@ const KEYS = Object.keys(FIELDS) as Field[];
 // A face close to someone already registered goes to the lecturer as a possible duplicate.
 export async function POST(req: Request, { params }: RouteContext<"/api/s/[id]/register">) {
   const { id } = await params;
-  const body = await readBody(req, registerSchema, 300_000);
+  const body = await readBody(req, registerSchema, 600_000);
   if (body instanceof Response) return body;
   if (body.company) return Response.json({ ok: true, status: "active" });
 
@@ -45,7 +45,7 @@ export async function POST(req: Request, { params }: RouteContext<"/api/s/[id]/r
 
   let face;
   try {
-    face = await checkFace(t.challenge, body.frames);
+    face = await checkFace(t.challenge, body);
   } catch {
     return faceUnavailable();
   }

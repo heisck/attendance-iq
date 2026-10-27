@@ -42,6 +42,7 @@ export const FACE_ERRORS = {
   challenge: "We couldn't see you follow the moves. Try again, turning a bit further each time.",
   same_face: "A different face appeared during the check. One person at a time, please.",
   spoof: "That looked like a photo or a screen. Use your own face, live.",
+  continuity: "We lost track of your face. Keep it in the oval the whole time and turn smoothly.",
 };
 
 export const faceUnavailable = () => fail(503, "Face check is busy. Wait a few seconds and try again.");

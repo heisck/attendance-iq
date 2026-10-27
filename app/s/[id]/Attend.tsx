@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { FaceCheck } from "@/components/FaceCheck";
+import { FaceCheck, type Capture } from "@/components/FaceCheck";
 import { PhoneHead, PhoneState } from "@/components/Phone";
 import { PillField } from "@/components/PillField";
 import { QrScanner } from "@/components/QrScanner";
@@ -22,29 +22,29 @@ export function Attend({ title, sessionId }: { title: string; sessionId: string 
   const [marked, setMarked] = useState(0);
   const [markedAt, setMarkedAt] = useState(0);
   const [ticket, setTicket] = useState<Ticket | null>(null);
-  // Set after the first mark: lets this tab show codes and mark the next person without scanning.
+  // Set after the first mark: lets this tab show codes, and keeps it one phone in the lecturer's list.
+  // Every person marked here still scans a live code first (that's what shows they're in the room).
   const [node, setNode] = useState("");
   const company = useRef("");
 
-  // `notice`: shown on the index screen once the new ticket arrives (why the check has to run again).
-  async function getTicket(body: { code?: string; node?: string }, notice = "") {
+  async function getTicket(code: string) {
     setBusy(true);
-    const r = await post(`/api/s/${sessionId}/ticket`, body);
+    const r = await post(`/api/s/${sessionId}/ticket`, { code, node: node || undefined });
     setBusy(false);
     if (r.status === 410) return setStep("closed");
     if (!r.ok) return setError(r.error);
     setTicket(r.data);
-    setError(notice);
+    setError("");
     setStep("index");
   }
 
   const scanned = (code: string) => {
     // Only codes for this session; anything else (a URL, another class) is ignored.
-    if (!busy && code.startsWith(`${sessionId}.`)) getTicket({ code });
+    if (!busy && code.startsWith(`${sessionId}.`)) getTicket(code);
   };
 
-  async function faceDone(frames: string[]) {
-    const r = await post(`/api/s/${sessionId}/attend`, { ticket: ticket!.ticket, indexNo, frames, company: company.current });
+  async function faceDone(capture: Capture) {
+    const r = await post(`/api/s/${sessionId}/attend`, { ticket: ticket!.ticket, indexNo, ...capture, company: company.current });
     if (r.ok) {
       setNode(r.data.node ?? node);
       setMarkedAt(r.data.markedAt ?? Date.now());
@@ -56,15 +56,17 @@ export function Attend({ title, sessionId }: { title: string; sessionId: string 
     if (r.status === 410) return setStep("closed");
     if (r.data.rescan) {
       setTicket(null);
-      // A node phone needs no scan: it gets a fresh ticket itself, so the server's "scan again" doesn't apply.
-      return node ? getTicket({ node }, "That check ran out of time or tries. Run the face check again.") : setStep("scan");
+      return setStep("scan");
     }
     setStep("index");
   }
 
+  // The next person on this phone starts by scanning a live code, like everyone else.
   function nextPerson() {
     setIndexNo("");
-    getTicket({ node });
+    setTicket(null);
+    setError("");
+    setStep("scan");
   }
 
   if (step === "closed")
@@ -86,7 +88,7 @@ export function Attend({ title, sessionId }: { title: string; sessionId: string 
 
       {step === "scan" && (
         <div className="phone-body">
-          <h1>Scan the class QR code</h1>
+          <h1>{marked > 0 ? "Next person: scan the class QR code" : "Scan the class QR code"}</h1>
           <QrScanner onCode={scanned} paused={busy} />
           <p className="muted">{busy ? "Checking the code…" : "Point at the code on your lecturer's screen or a classmate's phone."}</p>
           {error && (
@@ -108,7 +110,7 @@ export function Attend({ title, sessionId }: { title: string; sessionId: string 
           }}
         >
           <div className="phone-body">
-            {!error && <p className="notice notice-ok">{marked > 0 ? "Ready for the next person." : "Code accepted. You have 2 minutes to finish."}</p>}
+            {!error && <p className="notice notice-ok">Code accepted. You have 2 minutes to finish.</p>}
             <h1>{marked > 0 ? "Next person" : "Your index number"}</h1>
             <PillField
               id="index"

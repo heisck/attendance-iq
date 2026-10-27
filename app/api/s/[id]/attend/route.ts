@@ -11,7 +11,7 @@ export const maxDuration = 60;
 // makes this tab a node (it gets a node token to show codes and mark the next person).
 export async function POST(req: Request, { params }: RouteContext<"/api/s/[id]/attend">) {
   const { id } = await params;
-  const body = await readBody(req, attendSchema, 300_000);
+  const body = await readBody(req, attendSchema, 600_000);
   if (body instanceof Response) return body;
   if (body.company) return Response.json({ ok: true });
 
@@ -34,7 +34,7 @@ export async function POST(req: Request, { params }: RouteContext<"/api/s/[id]/a
 
   let face;
   try {
-    face = await checkFace(t.challenge, body.frames);
+    face = await checkFace(t.challenge, body);
   } catch {
     return faceUnavailable();
   }

@@ -3,7 +3,7 @@
     FACE_URL=... FACE_TOKEN_ID=... FACE_TOKEN_SECRET=... python face/loadtest.py face.jpg [N=1000]
 
 face.jpg: one face photo about 360 px wide (what the app sends per frame). Every check reuses it with a
-center-only challenge, so this measures throughput and autoscaling, not liveness. The photo only goes to
+center-only challenge and the same photo as every snapshot, so this measures throughput and autoscaling, not liveness. The photo only goes to
 your own endpoint. Costs roughly N x 0.2 CPU-seconds of Modal credit.
 """
 
@@ -21,7 +21,8 @@ url = os.environ["FACE_URL"]
 headers = {"Modal-Key": os.environ["FACE_TOKEN_ID"], "Modal-Secret": os.environ["FACE_TOKEN_SECRET"], "content-type": "application/json"}
 frame = base64.b64encode(open(sys.argv[1], "rb").read()).decode()
 n = int(sys.argv[2]) if len(sys.argv) > 2 else 1000
-body = json.dumps({"challenge": ["center"] * 3, "frames": [frame] * 6}).encode()
+# Snapshots every 200 ms over 3 steps (33), each full frame marked against its own snapshot, as FaceCheck sends.
+body = json.dumps({"challenge": ["center"] * 3, "frames": [frame] * 6, "track": [frame] * 33, "marks": [6, 9, 17, 20, 28, 31]}).encode()
 
 
 def check(_):

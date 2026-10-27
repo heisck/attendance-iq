@@ -14,7 +14,7 @@ export function pickChallenge(): Step[] {
   return Math.random() < 0.5 ? ["center", "left", "right"] : ["center", "right", "left"];
 }
 
-export type FaceResult = { ok: true; embedding: Float32Array } | { ok: false; reason: "no_face" | "challenge" | "same_face" | "spoof" };
+export type FaceResult = { ok: true; embedding: Float32Array } | { ok: false; reason: "no_face" | "challenge" | "same_face" | "spoof" | "continuity" };
 
 async function call(body: object) {
   const res = await fetch(process.env.FACE_URL!, {
@@ -29,8 +29,8 @@ async function call(body: object) {
   return res.json();
 }
 
-export async function checkFace(challenge: Step[], frames: string[]): Promise<FaceResult> {
-  const r = await call({ challenge, frames });
+export async function checkFace(challenge: Step[], capture: { frames: string[]; track: string[]; marks: number[] }): Promise<FaceResult> {
+  const r = await call({ challenge, frames: capture.frames, track: capture.track, marks: capture.marks });
   // Numbers only (how far each move got), for tuning TURN / TILT in face/app.py. No images are kept.
   if (!r.ok) console.warn(`face check failed: ${r.reason}${r.detail ? ` ${JSON.stringify(r.detail)}` : ""}`);
   return r.ok ? { ok: true, embedding: fromBase64(r.embedding) } : { ok: false, reason: r.reason };

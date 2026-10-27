@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FaceCheck } from "@/components/FaceCheck";
+import { FaceCheck, type Capture } from "@/components/FaceCheck";
 import { PhoneHead, PhoneState } from "@/components/Phone";
 import { PillField } from "@/components/PillField";
 import { post } from "@/lib/post";
@@ -102,8 +102,8 @@ export function Register({ title, sessionId, autoApprove }: { title: string; ses
     setStep("face");
   }
 
-  async function faceDone(frames: string[]) {
-    const r = await post(`/api/s/${sessionId}/register`, { ticket: ticket!.ticket, rosterId: picked?.id, fields: typed, frames, company: company.current });
+  async function faceDone(capture: Capture) {
+    const r = await post(`/api/s/${sessionId}/register`, { ticket: ticket!.ticket, rosterId: picked?.id, fields: typed, ...capture, company: company.current });
     if (r.status === 410) return setStep("closed");
     if (!r.ok) {
       setError(r.error);
