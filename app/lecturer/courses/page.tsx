@@ -11,7 +11,7 @@ export default async function Courses() {
         {courses.map((c) => {
           const { students, registered } = c;
           const mine = sessions.filter((s) => s.courseId === c.id);
-          const last = mine.filter((s) => s.kind === "attendance" && s.status === "closed" && s.startedAt).sort((a, b) => b.date.localeCompare(a.date))[0];
+          const last = mine.filter((s) => s.kind === "attendance" && s.status === "closed" && s.startedAt).sort((a, b) => b.startedAt! - a.startedAt!)[0];
           const next = mine.filter((s) => s.status === "scheduled").sort((a, b) => a.date.localeCompare(b.date))[0];
           const turnout = last && progress(last);
           return (

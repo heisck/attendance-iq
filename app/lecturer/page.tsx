@@ -10,7 +10,7 @@ export default async function Dashboard() {
     .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
   const last = sessions
     .filter((s) => s.kind === "attendance" && s.status === "closed" && s.startedAt)
-    .sort((a, b) => b.date.localeCompare(a.date))[0];
+    .sort((a, b) => b.startedAt! - a.startedAt!)[0];
   const turnout = last && progress(last);
 
   return (

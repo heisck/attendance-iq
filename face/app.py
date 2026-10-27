@@ -30,7 +30,7 @@ MIN_FACE = 80  # px; smaller faces are too far away to judge
 # and never jumps, so swapping photos of someone (left, right, ...) in front of the camera fails.
 TRACK_GAP = 1  # snapshots in a row allowed without a face (a blur); a hand swapping photos hides it longer
 TRACK_SHIFT = 0.3  # max move of the face centre between snapshots, in face widths
-TRACK_SCALE = 1.25  # max change in face size between snapshots
+TRACK_SCALE = 1.5  # max change in face size between snapshots (a turning head's box narrows a lot)
 TRACK_TURN = 0.6  # max yaw change between snapshots (eye distances); a real turn passes through the angles between
 TRACK_SAME = 14.0  # max mean grey-level difference between a frame and the snapshot taken with it (0-255)
 
@@ -154,7 +154,9 @@ def continuity(m: Models, track: list[bytes], frames: list[bytes], marks: list[i
             turn = max(turn, abs(p["yaw"] - q["yaw"]) / k)
         prev = (i, p)
     detail = {"gap": gap, "shift": round(shift, 2), "scale": round(scale, 2), "turn": round(turn, 2), "same": round(same, 1)}
-    if gap > TRACK_GAP or shift > TRACK_SHIFT or scale > TRACK_SCALE or turn > TRACK_TURN or same > TRACK_SAME:
+    if gap > TRACK_GAP:
+        return {"ok": False, "reason": "no_face", "detail": detail}
+    if shift > TRACK_SHIFT or scale > TRACK_SCALE or turn > TRACK_TURN or same > TRACK_SAME:
         return {"ok": False, "reason": "continuity", "detail": detail}
     return None
 

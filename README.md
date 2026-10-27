@@ -43,11 +43,16 @@ Checks: `npm test` (QR signing, timing rules, CSV), `npx tsc --noEmit`, `npm run
 
 - **QR codes** stream to each screen over Server-Sent Events (`/api/s/[id]/qr`): one long response per screen instead of a request per second. Codes are HMACs, so making and checking them touches no storage.
 - **Scan → ticket** costs one Redis write. **Face check** costs one Redis read, one Turso read, the Modal call and one Turso write. Session rows are cached in memory for 5 s per server instance.
-- **Modal** runs 2 checks per 2-CPU container and scales to 40 containers (about 80 checks in flight). A check is about 0.2 s of CPU. Pressing Start wakes a container ahead of the rush. To go higher, raise `max_containers` in `face/app.py`.
+- **Modal** runs 2 checks per 2-CPU container and scales to 40 containers (about 80 checks in flight). A check takes about 1 s on Modal's CPUs (6 frames plus ~33 snapshots). Pressing Start wakes a container ahead of the rush. To go higher, raise `max_containers` in `face/app.py`.
+- **Turso** client allows 200 requests in flight per server instance (`lib/db.ts`; the library default of 20 queued a whole class).
 - **Duplicate check** compares against every face in the course, cached in Redis as one hash per course.
 - Per-IP limits on student routes assume a whole class shares one campus IP (600–1500 per 10 minutes). Sign-in stays at 5 per 10 minutes.
 
-Measured locally with a stubbed face service (`next start`, local Redis and SQLite): 1000 students scanned and marked at once, all 1000 recorded exactly once, and 300 phones streaming QR codes at 1 per second. To measure the deployed face service itself:
+Measured (October 2026):
+- **App + Turso + Upstash**, face call stubbed, one local `next start`: 1000 students scanned and marked at once, all 1000 recorded exactly once; 300 phones streaming QR codes at ~1 per second.
+- **Face service**, 1000 real checks fired at once from inside Modal: 996 passed (the rest were the test client's own connection errors); every check answered within ~37 s (median 31 s), under the app's 45 s limit. A real class arrives over minutes, not in one instant; for more headroom raise `max_containers`.
+
+To measure the deployed face service yourself:
 
 ```bash
 FACE_URL=... FACE_TOKEN_ID=... FACE_TOKEN_SECRET=... python face/loadtest.py face.jpg 1000
