@@ -10,8 +10,6 @@ Local:   python face/app.py <models dir> <image>...   (runs analyze() without Mo
 """
 
 import base64
-import hmac
-import os
 import threading
 
 import modal
@@ -42,7 +40,7 @@ app = modal.App("attendance-iq-face", image=image)
 with image.imports():
     import cv2
     import numpy as np
-    from fastapi import Header, HTTPException
+    from fastapi import HTTPException
 
 
 class Models:
@@ -137,7 +135,7 @@ def analyze(m: Models, frames: list[bytes], challenge: list[str]) -> dict:
 
 # ponytail: 2 CPUs x 2 inputs per container, up to 40 containers (~80 checks in flight, ~1000 students in well
 # under a minute). Raise max_containers if a bigger class queues.
-@app.cls(cpu=2.0, memory=1024, max_containers=40, buffer_containers=2, scaledown_window=300, secrets=[modal.Secret.from_name("attendance-iq-face")])
+@app.cls(cpu=2.0, memory=1024, max_containers=40, buffer_containers=2, scaledown_window=300)
 @modal.concurrent(max_inputs=2)
 class Face:
     @modal.enter()
@@ -147,10 +145,10 @@ class Face:
 
     # POST {challenge: ["center", "left", ...], frames: [base64 jpeg, ...]} -> {ok, reason?, embedding?}
     # POST {warm: true} wakes a container when the lecturer presses Start.
-    @modal.fastapi_endpoint(method="POST")
-    def check(self, body: dict, authorization: str = Header("")):
-        if not hmac.compare_digest(authorization, f"Bearer {os.environ['FACE_API_KEY']}"):
-            raise HTTPException(401)
+    # Modal's proxy auth rejects calls without the workspace's Modal-Key/Modal-Secret headers before
+    # any container starts, so strangers can't spend the credits.
+    @modal.fastapi_endpoint(method="POST", requires_proxy_auth=True)
+    def check(self, body: dict):
         if body.get("warm"):
             return {"ok": True}
         challenge, frames = body.get("challenge"), body.get("frames")

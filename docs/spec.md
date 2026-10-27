@@ -2,7 +2,7 @@
 
 A self-hosted attendance system. Lecturers deploy their own copy. Students have no accounts: they register once per course with their face, then mark attendance by scanning a rotating QR code and passing a face + liveness check.
 
-Status: **UI phase.** Screens run on mock data from [`/mocks`](../mocks). No database, no face model yet.
+Status: **Live data.** Turso, Upstash and the Modal face service are wired in; setup and deploy steps are in the [README](../README.md).
 
 ## Stack
 
@@ -13,9 +13,7 @@ Status: **UI phase.** Screens run on mock data from [`/mocks`](../mocks). No dat
 | Cache, rate limits, live session state | Upstash Redis |
 | Face liveness, face embedding | Modal (Python, CPU). Only the heavy compute lives here. |
 
-Modal is stateless: frames in, `{ live, sameFace, embedding }` out. Vercel does the comparison against stored embeddings and writes to Turso.
-
-If Vercel free limits are hit (see "Known costs" below), the live QR push moves to Modal too.
+Modal is stateless: frames and the challenge in, `{ ok, reason?, embedding? }` out (`reason` is `no_face`, `challenge`, `same_face` or `spoof`). Vercel does the comparison against stored embeddings and writes to Turso. Models: YuNet (face + landmarks), SFace (128-d embedding), MiniFASNetV2 (anti-spoof), all on OpenCV's DNN module on CPU.
 
 ## Who uses it
 
@@ -42,7 +40,7 @@ Lecturer navigation: the sidebar holds **Dashboard** (live sessions, schedule, c
 4. If the name isn't on the roster, the student types every field in full and still submits (this also counts as an edit).
 5. A roster entry that has already registered stops appearing in suggestions. Only the lecturer can release it.
 6. Face capture with a liveness challenge (below).
-7. **Duplicate check:** the new face is compared against every registered face in the course. A close match is not rejected. It goes to the lecturer as "possible duplicate of X". The lecturer uploads a photo as evidence (e.g. twins) and approves or rejects. The evidence photo is deleted once a decision is made.
+7. **Duplicate check:** the new face is compared against every registered face in the course. A close match is not rejected. It goes to the lecturer as "possible duplicate of X". The lecturer checks both students in person and picks a photo of them together as evidence (e.g. twins) before approving. The photo stays on the lecturer's device and is never uploaded.
 8. A bad face scan can only be redone after the lecturer resets it.
 
 Fields: full name, student email, student number, index number (student number and index number are different things).
@@ -62,7 +60,8 @@ Chain depth is unlimited. The rotating code is what protects it.
 
 - A new code every second. Each code is signed by the server and carries the server's time.
 - **Scanning and submitting are separate.** On scan, the phone sends the code to the server straight away. The server checks that the code was issued ≤3 s ago by its own clock and returns a **scan ticket** (one use, valid ~2 min). The face check then runs at its own pace, and the submit carries the ticket. The phone's clock is never trusted.
-- Nodes fetch codes from the server. They never hold the signing secret (otherwise a student could pass it to an absent friend, who could then make valid codes at home).
+- Nodes fetch codes from the server. They never hold the signing secret (otherwise a student could pass it to an absent friend, who could then make valid codes at home). Codes arrive as a Server-Sent Events stream, one per second, so each screen holds one long response instead of making a request every second.
+- A tab becomes a node by marking someone; the server then gives it a **node token** (signed session + node id). The token lets it stream codes and start the next person's check without scanning.
 - Making and checking codes is stateless (an HMAC with a server secret), so it costs no Redis calls. Only redeeming a ticket touches Redis.
 
 ## Face + liveness
@@ -78,7 +77,7 @@ All on the server (Modal). The phone only captures frames.
    - the face matches the registered embedding (1:1).
 4. Frames are processed in memory and dropped. **Only embeddings are stored. No photos**, except the duplicate-evidence photo, which is deleted after the decision.
 
-Duplicate check speed: comparing one embedding against a course's embeddings is a plain loop. 500 students × 512 floats takes under 1 ms. Each course's embeddings are cached in Upstash. Turso's vector search is the upgrade path if a single deployment ever passes ~50k students.
+Duplicate check speed: comparing one embedding against a course's embeddings is a plain loop. 1000 students × 128 floats takes about 1 ms. Each course's embeddings are cached in Upstash. Turso's vector search is the upgrade path if a single deployment ever passes ~50k students.
 
 ## Known limits (accepted for v1)
 
@@ -91,6 +90,7 @@ Duplicate check speed: comparing one embedding against a course's embeddings is 
 | Live video call relaying the QR code | **Not blocked.** Lecturer sees marks per node. |
 | Real-time deepfake through a virtual camera | **Not blocked.** The phone-only gate makes it harder; the browser type can be faked. |
 | Twins marking for each other after approval | **Not blocked.** |
+| A node token copied to an absent friend's phone | **Not blocked.** Their marks show under that node, which the lecturer sees flagged once it marks many people. |
 
 Backstops: the live count vs. people in the room, the marks made by each node, and manual unmark.
 
@@ -98,17 +98,20 @@ Other limits: models can be less accurate in poor lighting and on some skin tone
 
 ## Known costs
 
-- **Vercel Hobby:** the 1-per-second QR push for nodes is the expensive part (200 nodes × 30 min ≈ 360k requests). If it hits the limit, the push moves to a Modal WebSocket.
-- **Modal Starter:** $30/month free credits. The container wakes when the lecturer presses Start. Concurrent inputs must be set high, because each WebSocket counts as one input.
+- **Vercel Hobby:** each screen showing a QR code holds one streaming response (reconnecting every ~5 minutes), so 200 nodes × 30 min is about 1,200 requests, not 360k.
+- **Modal Starter:** $30/month free credits. A face check is about 0.2 CPU-seconds. Pressing Start wakes a container; idle containers shut down after 5 minutes.
 
-## Planned data model
+## Data model
+
+See [`db/schema.sql`](../db/schema.sql).
 
 - `courses(id, code, name)`
-- `roster(id, course_id, name, email, student_no, index_no, claimed_by)`
-- `students(id, course_id, name, email, student_no, index_no, embedding, status)` where status is `active | pending_duplicate | pending_edit`
-- `sessions(id, course_id, week, kind, opens_at, closes_at, auto_approve_edits, status)` where kind is `registration | attendance`
-- `attendance(session_id, student_id, marked_at, node_id, method)`, unique on `(session_id, student_id)`, method is `face | manual`
-- `approvals(id, kind, student_id, payload, evidence_photo, status)` where kind is `duplicate_face | edit`
+- `students(id, course_id, name, email, student_no, index_no, embedding, status, on_roster)`. Roster and registrations share one table: an imported roster row has no embedding until the student registers. `status` is `active | pending_duplicate | pending_edit`; `on_roster = 0` for students who weren't listed and typed their own details. Unique on `(course_id, index_no)`.
+- `sessions(id, course_id, week, kind, date, starts, ends, opens_at, closes_at, auto_approve_edits, started_at, stopped_at)`. Status is computed: attendance is live from Start until Stop, 30 minutes or `closes_at`; registration is live from `opens_at` (or Start) until Stop or `closes_at`.
+- `attendance(session_id, student_id, marked_at, node_id, from_node, method)`, unique on `(session_id, student_id)`, method is `face | manual`.
+- `approvals(id, kind, student_id, payload, created_at)` where kind is `duplicate_face | edit`. Rows are deleted once decided.
+
+Redis holds scan tickets (2 minutes, 3 face tries each), rate-limit counters and a per-course hash of embeddings for the duplicate check.
 
 ## Not building
 

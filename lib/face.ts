@@ -18,7 +18,8 @@ export type FaceResult = { ok: true; embedding: Float32Array } | { ok: false; re
 async function call(body: object) {
   const res = await fetch(process.env.FACE_URL!, {
     method: "POST",
-    headers: { authorization: `Bearer ${process.env.FACE_API_KEY}`, "content-type": "application/json" },
+    // A Modal proxy auth token (modal.com -> Settings -> Proxy Auth Tokens).
+    headers: { "Modal-Key": process.env.FACE_TOKEN_ID!, "Modal-Secret": process.env.FACE_TOKEN_SECRET!, "content-type": "application/json" },
     body: JSON.stringify(body),
     // A cold container plus a queue during a class-wide rush stays well under this.
     signal: AbortSignal.timeout(45_000),
