@@ -34,7 +34,7 @@ Checks: `npm test` (QR signing, timing rules, CSV), `npx tsc --noEmit`, `npm run
 
 ## Deploy
 
-1. **Face service.** `modal deploy face/app.py` (needs the [Modal CLI](https://modal.com/docs/guide) signed in). It prints the endpoint URL. In modal.com → Settings → Proxy Auth Tokens, create a token. Set `FACE_URL`, `FACE_TOKEN_ID` and `FACE_TOKEN_SECRET`. Calls without the token are refused by Modal before any container starts.
+1. **Face service.** `modal deploy face/app.py` (needs the [Modal CLI](https://modal.com/docs/guide) signed in). It prints the endpoint URL, shaped like `https://<workspace>--attendance-iq-face-face-check.<region>.modal.run`; it's also on the app's page at modal.com → Apps → attendance-iq-face. In modal.com → Settings → Proxy Auth Tokens, create a token. Set `FACE_URL`, `FACE_TOKEN_ID` and `FACE_TOKEN_SECRET`. Calls without the token are refused by Modal before any container starts.
 2. **Database.** Create a Turso database, set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`, then run `npm run db:migrate` with those in `.env.local`.
 3. **Redis.** Create an Upstash Redis database; set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`.
 4. **Vercel.** Import the repo and add every variable from `.env.example` (leave `NEXT_PUBLIC_DEV_ALLOW_DESKTOP` empty).

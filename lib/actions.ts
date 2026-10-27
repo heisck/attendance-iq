@@ -40,9 +40,11 @@ export async function createSession(input: unknown): Promise<{ id: string } | { 
 }
 
 // Start (again, if stopped): opens attendance for 30 minutes and wakes the face service.
+// Past its closing time it changes nothing: a session that never opened mustn't count as held.
 export async function startSession(sessionId: string) {
   await lecturer();
-  await db.execute({ sql: "UPDATE sessions SET started_at = ?, stopped_at = NULL WHERE id = ?", args: [Date.now(), id(sessionId)] });
+  const now = Date.now();
+  await db.execute({ sql: "UPDATE sessions SET started_at = ?, stopped_at = NULL WHERE id = ? AND closes_at > ?", args: [now, id(sessionId), now] });
   after(warmFace);
   refresh();
   return getSession(id(sessionId), true);

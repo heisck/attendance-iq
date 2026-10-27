@@ -3,7 +3,9 @@ import { FIELDS, type Field } from "./schemas";
 import { sessionStatus, type SessionKind, type SessionStatus } from "./time";
 
 // Turso in production (libsql://... + token); a local file in dev (TURSO_DATABASE_URL=file:local.db).
-export const db = createClient({ url: process.env.TURSO_DATABASE_URL ?? "file:local.db", authToken: process.env.TURSO_AUTH_TOKEN });
+// The client queues past `concurrency` requests in flight (default 20); one instance can serve a whole
+// class at once, and each request is a short HTTP call, so allow more.
+export const db = createClient({ url: process.env.TURSO_DATABASE_URL ?? "file:local.db", authToken: process.env.TURSO_AUTH_TOKEN, concurrency: 200 });
 
 export const newId = (len = 10) => crypto.randomUUID().replaceAll("-", "").slice(0, len);
 

@@ -26,14 +26,15 @@ export function Attend({ title, sessionId }: { title: string; sessionId: string 
   const [node, setNode] = useState("");
   const company = useRef("");
 
-  async function getTicket(body: { code?: string; node?: string }) {
+  // `notice`: shown on the index screen once the new ticket arrives (why the check has to run again).
+  async function getTicket(body: { code?: string; node?: string }, notice = "") {
     setBusy(true);
     const r = await post(`/api/s/${sessionId}/ticket`, body);
     setBusy(false);
     if (r.status === 410) return setStep("closed");
     if (!r.ok) return setError(r.error);
     setTicket(r.data);
-    setError("");
+    setError(notice);
     setStep("index");
   }
 
@@ -55,7 +56,8 @@ export function Attend({ title, sessionId }: { title: string; sessionId: string 
     if (r.status === 410) return setStep("closed");
     if (r.data.rescan) {
       setTicket(null);
-      return node ? getTicket({ node }) : setStep("scan");
+      // A node phone needs no scan: it gets a fresh ticket itself, so the server's "scan again" doesn't apply.
+      return node ? getTicket({ node }, "That check ran out of time or tries. Run the face check again.") : setStep("scan");
     }
     setStep("index");
   }

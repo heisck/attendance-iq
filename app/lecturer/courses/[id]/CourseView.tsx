@@ -51,7 +51,7 @@ export function CourseView({ course, students: list, columns, marks }: { course:
       setNotice(
         "error" in r
           ? { ok: false, text: r.error }
-          : { ok: !r.skipped.length, text: `${r.added} students imported.${r.skipped.length ? ` Skipped ${r.skipped.length}: ${r.skipped.slice(0, 3).join("; ")}${r.skipped.length > 3 ? "; …" : ""}` : ""}` },
+          : { ok: !r.skipped.length, text: `${r.added} ${r.added === 1 ? "student" : "students"} imported.${r.skipped.length ? ` Skipped ${r.skipped.length}: ${r.skipped.slice(0, 3).join("; ")}${r.skipped.length > 3 ? "; …" : ""}` : ""}` },
       );
     } catch {
       setNotice({ ok: false, text: "Import failed. Check the file and try again." });
