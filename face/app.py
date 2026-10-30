@@ -171,7 +171,7 @@ def analyze(m: Models, frames: list[bytes], challenge: list[str], track: list[by
     per = len(frames) // len(challenge)
     seen = [frame(m, f) for f in frames]
     if any(s is None for s in seen):
-        return {"ok": False, "reason": "no_face"}
+        return {"ok": False, "reason": "no_face", "detail": {"missing": f"{sum(s is None for s in seen)} of {len(seen)}"}}
 
     steps = [seen[i * per : (i + 1) * per] for i in range(len(challenge))]
     center = [s for step, kind in zip(steps, challenge) if kind == "center" for s in step]
@@ -196,12 +196,14 @@ def analyze(m: Models, frames: list[bytes], challenge: list[str], track: list[by
 
     emb = np.mean([s["emb"] for s in center], axis=0)
     emb = emb / np.linalg.norm(emb)
-    if min(float(s["emb"] @ emb) for s in seen) < SAME_FACE:
-        return {"ok": False, "reason": "same_face"}
-    if np.mean([s["real"] for s in seen]) < REAL:
-        return {"ok": False, "reason": "spoof"}
+    # The scores go back on every outcome, so passes show their margins too.
+    scores = {**best, "same": round(min(float(s["emb"] @ emb) for s in seen), 3), "real": round(float(np.mean([s["real"] for s in seen])), 3)}
+    if scores["same"] < SAME_FACE:
+        return {"ok": False, "reason": "same_face", "detail": scores}
+    if scores["real"] < REAL:
+        return {"ok": False, "reason": "spoof", "detail": scores}
 
-    return {"ok": True, "embedding": base64.b64encode(emb.astype("<f4").tobytes()).decode()}
+    return {"ok": True, "embedding": base64.b64encode(emb.astype("<f4").tobytes()).decode(), "detail": scores}
 
 
 # ponytail: 2 CPUs x 2 inputs per container, up to 40 containers (~80 checks in flight, ~1000 students in well

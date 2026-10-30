@@ -1,6 +1,6 @@
 import { fail, readBody } from "@/lib/api";
 import { db, getSession } from "@/lib/db";
-import { checkFace, cosine, fromBlob, MATCH } from "@/lib/face";
+import { checkFace, cosine, fromBlob, logFace, MATCH } from "@/lib/face";
 import { attendSchema } from "@/lib/schemas";
 import { nodeToken } from "@/lib/sign";
 import { endTicket, FACE_ERRORS, faceUnavailable, redeemTicket } from "@/lib/ticket";
@@ -39,7 +39,9 @@ export async function POST(req: Request, { params }: RouteContext<"/api/s/[id]/a
     return faceUnavailable();
   }
   if (!face.ok) return fail(422, FACE_ERRORS[face.reason]);
-  if (cosine(face.embedding, fromBlob(student.embedding as ArrayBuffer)) < MATCH)
+  const similarity = cosine(face.embedding, fromBlob(student.embedding as ArrayBuffer));
+  await logFace({ result: similarity < MATCH ? "no_match" : "match", similarity: Math.round(similarity * 1000) / 1000 });
+  if (similarity < MATCH)
     return fail(422, `Your face didn't match index number ${body.indexNo}. Check the number and try again.`);
 
   const markedAt = Date.now();

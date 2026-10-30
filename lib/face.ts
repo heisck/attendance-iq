@@ -33,8 +33,19 @@ export async function checkFace(challenge: Step[], capture: { frames: string[]; 
   const r = await call({ challenge, frames: capture.frames, track: capture.track, marks: capture.marks });
   // Numbers only (how far each move got), for tuning TURN / TILT in face/app.py. No images are kept.
   if (!r.ok) console.warn(`face check failed: ${r.reason}${r.detail ? ` ${JSON.stringify(r.detail)}` : ""}`);
+  await logFace({ result: r.ok ? "ok" : r.reason, ...r.detail });
   return r.ok ? { ok: true, embedding: fromBase64(r.embedding) } : { ok: false, reason: r.reason };
 }
+
+// The last 5000 face checks and 1:1 match scores, numbers only (no images, no student ids), so tuning
+// doesn't depend on Vercel's 1-hour log retention. Read with `npm run facelog`.
+export const logFace = (entry: object) =>
+  redis()
+    .pipeline()
+    .lpush("facelog", JSON.stringify({ t: Date.now(), ...entry }))
+    .ltrim("facelog", 0, 4999)
+    .exec()
+    .catch(() => undefined);
 
 // Wakes a container when the lecturer presses Start, so the first student doesn't wait on a cold start.
 export const warmFace = () => call({ warm: true }).catch(() => undefined);

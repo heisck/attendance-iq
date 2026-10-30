@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/checks.test.mjs",
-    "db:migrate": "node --env-file-if-exists=.env.local db/migrate.mjs"
+    "db:migrate": "node --env-file-if-exists=.env.local db/migrate.mjs",
+    "facelog": "node --env-file-if-exists=.env.local face/log.mjs"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",

@@ -66,4 +66,6 @@ Failures log numbers only (no images) in the server log, for tuning:
 - `face check failed: challenge {"left":"0.12 of 0.18", ..., "frames":"center:+0.02/0.55 ..."}`: how far each move got, and every frame's yaw/pitch.
 - `face check failed: continuity {"gap":0,"shift":0.12,"scale":1.1,"turn":0.2,"same":0.7}`: the largest jumps seen between snapshots.
 
+Vercel's Hobby plan keeps server logs for about an hour, so every face check (passes too) and every 1:1 match score is also kept in Redis (`facelog`, the last 5000, numbers only). `npm run facelog [hours]` (default a week) counts results (`ok`, `no_face`, `challenge`, `continuity`, `same_face`, `spoof`, `match`, `no_match`) and shows the spread of each score: `real` is the mean anti-spoof score (fails under `REAL`), `same` the lowest frame-to-center similarity (fails under `SAME_FACE`), `similarity` the 1:1 match (fails under `MATCH`).
+
 Knobs at the top of `face/app.py`: `TURN` and `TILT` (how far students must move), `TRACK_*` (continuity limits), `SAME_FACE`, `REAL` (anti-spoof) and `MIN_FACE`. The match threshold is `MATCH` in `lib/face.ts` (OpenCV's published SFace value). Test `face/app.py` against photos without Modal: `python face/app.py <models dir> img1.jpg img2.jpg`.
