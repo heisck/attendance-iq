@@ -21,11 +21,16 @@ export const STEPS = ["center", "left", "right", "up"] as const;
 export type Step = (typeof STEPS)[number];
 // Base64 JPEGs: frames ~20-30 KB each; track, a small snapshot every 200 ms (~3-5 KB); marks, the
 // snapshot each frame was taken with.
+const FRAME = 60_000;
+const SNAPSHOT = 12_000;
 const face = {
-  frames: z.array(z.string().max(60_000)).min(2).max(12),
-  track: z.array(z.string().max(12_000)).min(10).max(40),
+  frames: z.array(z.string().max(FRAME)).min(2).max(12),
+  track: z.array(z.string().max(SNAPSHOT)).min(10).max(40),
   marks: z.array(z.number().int().min(0).max(39)).max(12),
 };
+// Body limit for the face routes: everything the fields above allow, plus room for the rest. A fixed
+// smaller cap rejected valid checks from noisy phone cameras (noise makes JPEGs bigger) as "too large".
+export const FACE_BODY = 12 * FRAME + 40 * SNAPSHOT + 8_000;
 
 export const ticketSchema = z.object({ code: z.string().max(200).optional(), node: z.string().max(100).optional() });
 

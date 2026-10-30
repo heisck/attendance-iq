@@ -3,7 +3,7 @@ import { fail, ip, readBody } from "@/lib/api";
 import { db, getSession, newId } from "@/lib/db";
 import { cacheEmbedding, checkFace, closestMatch, toBlob } from "@/lib/face";
 import { allow } from "@/lib/redis";
-import { FIELDS, registerSchema, studentFields, type Field } from "@/lib/schemas";
+import { FIELDS, registerSchema, FACE_BODY, studentFields, type Field } from "@/lib/schemas";
 import { endTicket, FACE_ERRORS, faceUnavailable, redeemTicket } from "@/lib/ticket";
 
 export const maxDuration = 60;
@@ -15,7 +15,7 @@ const KEYS = Object.keys(FIELDS) as Field[];
 // A face close to someone already registered goes to the lecturer as a possible duplicate.
 export async function POST(req: Request, { params }: RouteContext<"/api/s/[id]/register">) {
   const { id } = await params;
-  const body = await readBody(req, registerSchema, 600_000);
+  const body = await readBody(req, registerSchema, FACE_BODY);
   if (body instanceof Response) return body;
   if (body.company) return Response.json({ ok: true, status: "active" });
 

@@ -1,7 +1,7 @@
 import { fail, readBody } from "@/lib/api";
 import { db, getSession } from "@/lib/db";
 import { checkFace, cosine, fromBlob, logFace, MATCH } from "@/lib/face";
-import { attendSchema } from "@/lib/schemas";
+import { attendSchema, FACE_BODY } from "@/lib/schemas";
 import { nodeToken } from "@/lib/sign";
 import { endTicket, FACE_ERRORS, faceUnavailable, redeemTicket } from "@/lib/ticket";
 
@@ -11,7 +11,7 @@ export const maxDuration = 60;
 // makes this tab a node (it gets a node token to show codes and mark the next person).
 export async function POST(req: Request, { params }: RouteContext<"/api/s/[id]/attend">) {
   const { id } = await params;
-  const body = await readBody(req, attendSchema, 600_000);
+  const body = await readBody(req, attendSchema, FACE_BODY);
   if (body instanceof Response) return body;
   if (body.company) return Response.json({ ok: true });
 
