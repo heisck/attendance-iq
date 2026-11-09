@@ -1,14 +1,38 @@
 import Link from "next/link";
-import { listCourses, listSessions } from "@/lib/db";
-import { day, progress } from "../SessionRow";
+import { level, listCourses, listSessions } from "@/lib/db";
+import { Filters } from "../Filters";
+import { day, one, progress, sorted } from "../SessionRow";
 
-export default async function Courses() {
+export default async function Courses({ searchParams }: PageProps<"/lecturer/courses">) {
+  const q = await searchParams;
+  const course = one(q.course);
+  const week = one(q.week);
+  const lvl = one(q.level);
   const [courses, sessions] = await Promise.all([listCourses(), listSessions()]);
+  // Week keeps the courses that have a session in that week.
+  const shown = courses.filter(
+    (c) => (!course || c.id === course) && (!lvl || level(c.code) === lvl) && (!week || sessions.some((s) => s.courseId === c.id && String(s.week) === week)),
+  );
   return (
     <main className="page">
       {courses.length === 0 && <p className="muted">No courses yet. Press + to create a session and add a new course with it.</p>}
+      {courses.length > 0 && (
+        <Filters
+          filters={[
+            { name: "course", label: "Course", value: course, options: sorted(new Map(courses.map((c) => [c.id, c.code]))) },
+            { name: "week", label: "Week", value: week, options: sorted(new Map(sessions.map((s) => [String(s.week), `Week ${s.week}`])), true) },
+            {
+              name: "level",
+              label: "Level",
+              value: lvl,
+              options: sorted(new Map(courses.filter((c) => level(c.code)).map((c) => [level(c.code), `Level ${level(c.code)}`])), true),
+            },
+          ]}
+        />
+      )}
+      {courses.length > 0 && shown.length === 0 && <p className="muted">No courses match these filters.</p>}
       <div className="course-cards">
-        {courses.map((c) => {
+        {shown.map((c) => {
           const { students, registered } = c;
           const mine = sessions.filter((s) => s.courseId === c.id);
           const last = mine.filter((s) => s.kind === "attendance" && s.status === "closed" && s.startedAt).sort((a, b) => b.startedAt! - a.startedAt!)[0];

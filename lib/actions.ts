@@ -39,7 +39,7 @@ export async function createSession(input: unknown): Promise<{ id: string } | { 
   return { id: sessionId };
 }
 
-// Start (again, if stopped): opens attendance for 30 minutes and wakes the face service.
+// Start: opens the session now (early, or again after a Stop) until its closing time, and wakes the face service.
 // Past its closing time it changes nothing: a session that never opened mustn't count as held.
 export async function startSession(sessionId: string) {
   await lecturer();

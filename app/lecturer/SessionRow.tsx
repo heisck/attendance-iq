@@ -9,6 +9,11 @@ export function day(date: string, opts: Intl.DateTimeFormatOptions) {
   return new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { timeZone: "UTC", ...opts });
 }
 
+// Filter helpers: a single query param, and a value->label map as sorted dropdown options.
+export const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : "");
+export const sorted = (m: Map<string, string>, byNum = false) =>
+  [...m].map(([value, label]) => ({ value, label })).sort((a, b) => (byNum ? +a.value - +b.value : a.label.localeCompare(b.label)));
+
 // Who's present (attendance) or registered (registration) out of the course roster.
 export const progress = (s: Session) => ({ done: s.done, total: s.total, label: s.kind === "registration" ? "registered" : "present" });
 

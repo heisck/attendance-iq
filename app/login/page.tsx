@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FaceLine } from "@/components/FaceLine";
+import { useSplashDone } from "@/components/Splash";
 import { QrPasswordField } from "@/components/QrPasswordField";
 import { post } from "@/lib/post";
 import { RESET_URL } from "@/lib/resetUrl";
@@ -13,6 +14,12 @@ export default function Login() {
   const router = useRouter();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Focus email only once the splash is gone: focusing under it pops the browser's autofill list over the animation.
+  const email = useRef<HTMLInputElement>(null);
+  const revealed = useSplashDone();
+  useEffect(() => {
+    if (revealed) email.current?.focus();
+  }, [revealed]);
   return (
     <div className="signin">
       <main className="signin-main">
@@ -65,7 +72,7 @@ export default function Login() {
                 placeholder=" "
                 autoComplete="email"
                 required
-                autoFocus
+                ref={email}
               />
               <label htmlFor="email" className="pill-label">
                 Email

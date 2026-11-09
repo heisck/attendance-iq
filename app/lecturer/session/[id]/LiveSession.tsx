@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { RotatingQr } from "@/components/RotatingQr";
 import { startSession, stopSession } from "@/lib/actions";
 import type { Node, Session } from "@/lib/db";
-import { AUTO_CLOSE_MS } from "@/lib/time";
 import { Ring } from "../../SessionRow";
 
 const POLL_MS = 3000;
@@ -20,6 +20,10 @@ function fmt(ms: number) {
 
 type Live = Pick<Session, "status" | "startedAt" | "done" | "total"> & { nodes: Node[] };
 
+// The top bar's slot (Topbar.tsx); shown in place of its buttons when the sidebar is hidden.
+const noop = () => () => {};
+const useTopSlot = () => useSyncExternalStore(noop, () => document.getElementById("top-slot"), () => null);
+
 export function LiveSession({ session, nodes, qrKey }: { session: Session; nodes: Node[]; qrKey: string }) {
   const [live, setLive] = useState<Live>({ ...session, nodes });
   const [now, setNow] = useState(() => Date.now());
@@ -33,7 +37,9 @@ export function LiveSession({ session, nodes, qrKey }: { session: Session; nodes
   const reg = session.kind === "registration";
   const link = `/s/${session.id}`;
   const byMarked = [...live.nodes].sort((a, b) => b.marked - a.marked);
-  const closesIn = reg ? session.closesAt - now : Math.min((live.startedAt ?? now) + AUTO_CLOSE_MS, session.closesAt) - now;
+  const closesIn = session.closesAt - now;
+  const slot = useTopSlot();
+  const results = `/lecturer/courses/${session.courseId}`;
 
   // Sends the count it already has, so the server can skip re-reading the phone list when nothing moved.
   const done = useRef(session.done);
@@ -64,6 +70,15 @@ export function LiveSession({ session, nodes, qrKey }: { session: Session; nodes
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [running, poll]);
+
+  // Scheduled with this page open: start it at its opening time, which also wakes the face service.
+  // (It opens by itself then anyway; Start just gets the page and the face service there with it.)
+  useEffect(() => {
+    if (live.status !== "scheduled") return;
+    const t = setTimeout(() => toggle(true), Math.min(session.opensAt - offset - Date.now(), 2 ** 31 - 1));
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- toggle is recreated each render; status and timing are what matter
+  }, [live.status, session.opensAt, offset]);
 
   async function toggle(start: boolean) {
     setBusy(true);
@@ -97,16 +112,27 @@ export function LiveSession({ session, nodes, qrKey }: { session: Session; nodes
         </div>
         {/* Idle, the stage carries the Start button. */}
         {running && (
-          <div className="ls-status">
-            <span className="pill pill-live" suppressHydrationWarning>
-              Live · {fmt(now - (live.startedAt ?? session.opensAt))}
-            </span>
-            <button className="btn btn-outline" onClick={() => toggle(false)} disabled={busy}>
-              Stop session
-            </button>
-          </div>
+          <button className="btn btn-outline ls-stop" onClick={() => toggle(false)} disabled={busy}>
+            Stop session
+          </button>
         )}
       </div>
+      {slot &&
+        createPortal(
+          <>
+            <p className="top-count" aria-live="polite">
+              <Ring pct={live.total ? (live.done / live.total) * 100 : 0} />
+              <span>
+                <strong>{live.done}</strong>/{live.total}
+                <span className="sr-only"> {reg ? "registered" : "present"}</span>
+              </span>
+            </p>
+            <Link href={results} className="btn btn-ink btn-sm">
+              Results
+            </Link>
+          </>,
+          slot,
+        )}
       {error && (
         <p className="notice notice-danger" role="alert">
           {error}
@@ -121,7 +147,7 @@ export function LiveSession({ session, nodes, qrKey }: { session: Session; nodes
           {running ? (
             <>
               <p className="live-meta ls-meta" suppressHydrationWarning>
-                {reg ? `Scan to open the registration form · closes in ${fmt(closesIn)}` : `New code every second · auto-closes in ${fmt(closesIn)}`}
+                {reg ? "Scan to open the registration form" : "New code every second"} · closes in {fmt(closesIn)}
               </p>
               <div className="ls-qr">
                 {reg ? (
@@ -144,19 +170,30 @@ export function LiveSession({ session, nodes, qrKey }: { session: Session; nodes
               Students open <span className="mono">{link}</span>
               {reg ? "." : ", then scan."}
             </p>
-            <div className="row">
+            {/* Always one row: the labels shorten on narrow screens (see .ls-btns). */}
+            <div className="ls-btns">
               <button className="btn btn-light" onClick={copy}>
-                {copied ? "Copied" : "Copy student link"}
+                {copied ? (
+                  "Copied"
+                ) : (
+                  <span>
+                    Copy<span className="ls-w1"> student</span>
+                    <span className="ls-w2"> link</span>
+                  </span>
+                )}
               </button>
               <button className="btn btn-outline-light" onClick={() => stage.current?.requestFullscreen()} disabled={!running}>
-                Project full screen
+                <span>
+                  <span className="ls-w1">Project </span>
+                  <span className="ls-cap">full screen</span>
+                </span>
               </button>
             </div>
           </div>
         </section>
 
         <aside className="dash-aside ls-side">
-          <section className="dash-section" aria-labelledby="count-h">
+          <section className="dash-section ls-count" aria-labelledby="count-h">
             <h2 id="count-h">{reg ? "Registered" : "Marked present"}</h2>
             <div className="turnout">
               <Ring pct={live.total ? (live.done / live.total) * 100 : 0} />
@@ -194,7 +231,7 @@ export function LiveSession({ session, nodes, qrKey }: { session: Session; nodes
             </section>
           )}
 
-          <Link href={`/lecturer/courses/${session.courseId}`} className="btn btn-ink">
+          <Link href={results} className="btn btn-ink ls-results">
             View results
           </Link>
         </aside>

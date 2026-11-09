@@ -1,6 +1,6 @@
 import { createClient, type Row } from "@libsql/client";
 import { FIELDS, type Field } from "./schemas";
-import { sessionStatus, type SessionKind, type SessionStatus } from "./time";
+import { openedAt, sessionStatus, type SessionKind, type SessionStatus } from "./time";
 
 // Turso in production (libsql://... + token); a local file in dev (TURSO_DATABASE_URL=file:local.db).
 // The client queues past `concurrency` requests in flight (default 20); one instance can serve a whole
@@ -10,6 +10,8 @@ export const db = createClient({ url: process.env.TURSO_DATABASE_URL ?? "file:lo
 export const newId = (len = 10) => crypto.randomUUID().replaceAll("-", "").slice(0, len);
 
 export type Course = { id: string; code: string; name: string; students: number; registered: number };
+// Level from the course code's first digit, the usual numbering: "CSC 301" -> "300". "" if the code has none.
+export const level = (code: string) => code.match(/\d/)?.[0].concat("00") ?? "";
 export type Student = {
   id: string;
   courseId: string;
@@ -32,6 +34,7 @@ export type Session = {
   end: string;
   opensAt: number;
   closesAt: number;
+  // When it opened (Start, or opensAt if it opened by itself). Null = never opened, so not held.
   startedAt: number | null;
   stoppedAt: number | null;
   autoApproveEdits: boolean;
@@ -69,7 +72,7 @@ function toSession(r: Row): Session {
     done: Number(r.kind === "registration" ? r.registered ?? 0 : r.present ?? 0),
     total: Number(r.total ?? 0),
   };
-  return { ...s, status: sessionStatus(s) };
+  return { ...s, status: sessionStatus(s), startedAt: openedAt(s) };
 }
 
 // Counts come from counter columns kept by triggers (db/schema.sql), so this reads one row per session

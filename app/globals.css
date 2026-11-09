@@ -46,7 +46,7 @@
   --si-placeholder: #5e5e5e;
   --si-outline: #d6d6d6;
   --si-soft: #f4f4f4;
-  --si-ash: #e6e6e4;
+  --si-ash: #d4d4d0;
   --si-round: 28px;
 }
 
@@ -57,6 +57,11 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* Pages still scroll; the bar itself is hidden for an app-like look. */
+  scrollbar-width: none;
+}
+::-webkit-scrollbar {
+  display: none;
 }
 
 body {
@@ -355,9 +360,9 @@ tr:last-child td {
   position: relative;
   display: grid;
   grid-template-columns: var(--side-w) minmax(0, 1fr);
-  gap: var(--s4);
+  gap: var(--s2);
   min-height: 100dvh;
-  padding: var(--s4);
+  padding: var(--s2);
   background: var(--si-ash);
   isolation: isolate;
   transition: grid-template-columns 300ms cubic-bezier(0.65, 0, 0.35, 1);
@@ -378,11 +383,11 @@ tr:last-child td {
 }
 .side {
   position: sticky;
-  top: var(--s4);
+  top: var(--s2);
   z-index: 1;
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - 2 * var(--s4));
+  height: calc(100dvh - 2 * var(--s2));
   touch-action: pan-y;
 }
 .side-block {
@@ -564,13 +569,43 @@ tr:last-child td {
 }
 .sheet {
   min-width: 0;
-  min-height: calc(100dvh - 2 * var(--s4));
+  min-height: calc(100dvh - 2 * var(--s2));
   background: var(--si-white);
   border-radius: var(--si-round);
 }
 .nav-tab,
 .nav-scrim {
   display: none;
+}
+/* Lecturer pages are white edge to edge, so the canvas behind them (seen when a scroll bounces past
+   the top or bottom) is white too. */
+html:has(.lect),
+html:has(.lect) body {
+  background: var(--si-white);
+}
+/* 1024px and up: menu and page fill the viewport edge to edge on plain white, split by one line.
+   No ash, contours or curves (those read only with ash showing between them); the black icon
+   circle marks the current page. */
+@media (min-width: 1024px) {
+  .lect {
+    --side-curve: 0px;
+    gap: 0;
+    padding: 0;
+    background: var(--si-white);
+  }
+  .lect::before {
+    display: none;
+  }
+  .side {
+    --si-round: 0px;
+    top: 0;
+    height: 100dvh;
+    border-right: 1px solid var(--si-outline);
+  }
+  .sheet {
+    min-height: 100dvh;
+    border-radius: 0;
+  }
 }
 /* Below 1024px: the page fills the screen edge to edge and the sidebar slides over it.
    Its own ash fill stands in for the backdrop, so the band and curves read the same. */
@@ -680,9 +715,7 @@ tr:last-child td {
   display: flex;
   align-items: center;
   gap: var(--s3);
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: var(--s5) var(--s4) 0;
+  padding: var(--s4) var(--s4) 0;
 }
 /* Dashboard search: sits where other pages show their title. */
 .top-search {
@@ -893,11 +926,23 @@ tr:last-child td {
   margin-top: var(--s2);
 }
 .lect .page {
-  padding-top: var(--s5);
+  max-width: none;
+  padding: var(--s4) var(--s4) var(--s6);
+  gap: var(--s4);
+}
+/* With the sidebar beside it, the sheet is wide: more inner room on both sides, top bar and page alike. */
+@media (min-width: 1024px) {
+  .lect .top,
+  .lect .page {
+    padding-inline: var(--s6);
+  }
+  .lect .top {
+    padding-top: var(--s5);
+  }
 }
 /* Narrow pages keep their reading width but line up under the title, not centred. */
 .lect .page-narrow {
-  max-width: 1120px;
+  max-width: none;
 }
 .lect .page-narrow > * {
   max-width: 640px;
@@ -1489,21 +1534,32 @@ tr:last-child td {
    the QR (what gets projected) beside the grey count-and-phones panel. */
 .ls-head {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--s4);
+  gap: var(--s3);
+}
+.ls-stop {
+  flex: none;
+}
+.ls-head > div {
+  min-width: 0;
+}
+@media (min-width: 360px) and (max-width: 599px) {
+  .ls-title {
+    white-space: nowrap;
+  }
+}
+@media (max-width: 599px) {
+  .ls-stop {
+    min-height: 44px;
+    padding: 0 var(--s4);
+    font-size: var(--text-sm);
+  }
 }
 .ls-title {
   font-size: clamp(1.5rem, 2.6vw, 2rem);
   font-weight: 700;
   letter-spacing: -0.02em;
-}
-.ls-status {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--s3);
 }
 .ls-grid {
   display: grid;
@@ -1515,8 +1571,11 @@ tr:last-child td {
   gap: var(--s4);
   padding: var(--s6) var(--s5) var(--s5);
 }
+/* Two lines reserved and fixed-width digits, so the ticking countdown never rewraps and nudges the QR. */
 .ls-meta {
+  min-height: 3em;
   padding-right: 48px;
+  font-variant-numeric: tabular-nums;
 }
 .ls-qr {
   align-self: stretch;
@@ -1574,6 +1633,36 @@ tr:last-child td {
   margin-top: var(--s2);
   padding-top: var(--s4);
   border-top: 1px solid rgb(255 255 255 / 0.18);
+}
+/* Copy link and Full screen share one row at every width; words drop as it narrows:
+   "Copy student link / Project full screen" -> "Copy link / Full screen" -> "Copy / Full screen". */
+.ls-btns {
+  display: flex;
+  gap: var(--s2);
+}
+.ls-btns .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-inline: var(--s3);
+  max-width: 240px;
+  white-space: nowrap;
+}
+@media (max-width: 599px) {
+  .ls-w1 {
+    display: none;
+  }
+  .ls-cap {
+    display: inline-block;
+  }
+  .ls-cap::first-letter {
+    text-transform: uppercase;
+  }
+}
+@media (max-width: 359px) {
+  .ls-w2,
+  .top-count .ring {
+    display: none;
+  }
 }
 .ls-link {
   color: #cfcfcf;
@@ -1654,6 +1743,35 @@ tr:last-child td {
 @media (max-width: 899px) {
   .ls-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Top-bar slot: filled by a page (live session), shown only while the sidebar is hidden. */
+.top-slot {
+  display: none;
+}
+.top-count {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-variant-numeric: tabular-nums;
+}
+.top-count .ring {
+  width: 36px;
+}
+.top-count strong {
+  font-size: 1.125rem;
+}
+@media (max-width: 1023px) {
+  .top-slot:not(:empty) {
+    display: flex;
+    align-items: center;
+    gap: var(--s3);
+    margin-left: auto;
+  }
+  .top:has(.top-slot:not(:empty)) .top-actions,
+  .ls-count,
+  .ls-results {
+    display: none;
   }
 }
 
@@ -2210,7 +2328,11 @@ tr:last-child td {
   }
 }
 
-/* Load splash: see components/Splash.tsx. Black and white on purpose. */
+/* Load splash: see components/Splash.tsx. Black and white on purpose.
+   Shown once per device: app/layout.tsx marks html[data-splash-seen] before paint on later visits. */
+html[data-splash-seen] .splash {
+  display: none;
+}
 .splash {
   position: fixed;
   inset: 0;
@@ -2847,4 +2969,47 @@ body:has(.phone) {
   .splash {
     display: none;
   }
+}
+
+/* Filter bar on History and Courses: native dropdowns styled as pills; an active one is tinted. */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+.filter select {
+  appearance: none;
+  min-height: var(--tap);
+  padding: 0 calc(var(--s5) + var(--s4)) 0 var(--s4);
+  border: 1.5px solid var(--si-outline);
+  border-radius: 999px;
+  background: var(--si-white)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2317201b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+    no-repeat right var(--s4) center / 16px;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.filter[data-on] select {
+  border-color: var(--brand);
+  background-color: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 600;
+}
+.filter select:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.filter-clear {
+  min-height: var(--tap);
+  padding: 0 var(--s3);
+  border: 0;
+  background: none;
+  color: var(--brand);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  cursor: pointer;
 }

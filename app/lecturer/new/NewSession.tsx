@@ -19,16 +19,24 @@ const CLOCK = (
   </>
 );
 
-export function NewSession({ courses }: { courses: Course[] }) {
+// "HH:MM" for a time in the lecturer's local clock.
+const hhmm = (d: Date) => d.toTimeString().slice(0, 5);
+
+export function NewSession({ courses, nextWeek }: { courses: Course[]; nextWeek: Record<string, number> }) {
   const [courseId, setCourseId] = useState(courses[0]?.id ?? "new");
   const [kind, setKind] = useState<keyof typeof KINDS>(courses.length ? "attendance" : "registration");
   const [autoApprove, setAutoApprove] = useState(false);
   const [code, setCode] = useState("");
   const [cname, setCname] = useState("");
-  const [week, setWeek] = useState("1");
+  const [week, setWeek] = useState(String(nextWeek[courses[0]?.id] ?? 1));
   const [date, setDate] = useState(() => new Date().toLocaleDateString("sv-SE"));
-  const [start, setStart] = useState("08:00");
-  const [end, setEnd] = useState("10:00");
+  // Opens now, closes 20 minutes later (capped at 23:59 so it stays the same day).
+  const [start, setStart] = useState(() => hhmm(new Date()));
+  const [end, setEnd] = useState(() => {
+    const now = new Date();
+    const later = new Date(now.getTime() + 20 * 60_000);
+    return later.getDate() === now.getDate() ? hhmm(later) : "23:59";
+  });
   const [sessionId, setSessionId] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -121,7 +129,7 @@ export function NewSession({ courses }: { courses: Course[] }) {
             <div className="choices">
               {courses.map((c) => (
                 <label key={c.id} className="choice">
-                  <input type="radio" name="course" className="sr-only" checked={courseId === c.id} onChange={() => setCourseId(c.id)} />
+                  <input type="radio" name="course" className="sr-only" checked={courseId === c.id} onChange={() => (setCourseId(c.id), setWeek(String(nextWeek[c.id] ?? 1)))} />
                   <strong>{c.code}</strong>
                   <span>
                     {c.name} · {c.students} students
@@ -129,7 +137,7 @@ export function NewSession({ courses }: { courses: Course[] }) {
                 </label>
               ))}
               <label className="choice choice-add">
-                <input type="radio" name="course" className="sr-only" checked={isNew} onChange={() => setCourseId("new")} />
+                <input type="radio" name="course" className="sr-only" checked={isNew} onChange={() => (setCourseId("new"), setWeek("1"))} />
                 <strong>New course</strong>
                 <span>Add its roster afterwards.</span>
               </label>
@@ -194,7 +202,7 @@ export function NewSession({ courses }: { courses: Course[] }) {
               <Pill id="end" label="Closes" type="time" required min={start} value={end} onChange={(e) => setEnd(e.target.value)} icon={CLOCK} />
             </div>
             <p className="hint">
-              The link only works between these times. Attendance also stops when you press Stop, or 30 minutes after you press Start.
+              The session opens and closes by itself at these times. Press Start to open it early, or Stop to close it early.
             </p>
           </fieldset>
 

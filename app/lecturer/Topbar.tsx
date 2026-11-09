@@ -129,6 +129,9 @@ export function Topbar({ name, approvals }: { name: string; approvals: Approval[
           {back[1]}
         </Link>
       )}
+      {/* A page can portal its own controls here (the live session's count and Results); below 1024px
+          they replace the buttons. */}
+      <div id="top-slot" className="top-slot" />
       <div className="top-actions">
         {/* On the New session page the + turns into an x that closes it. */}
         <Link

@@ -3,7 +3,6 @@ import { db, getSession } from "@/lib/db";
 import { checkFace, cosine, fromBlob, logFace, MATCH } from "@/lib/face";
 import { attendSchema, FACE_BODY } from "@/lib/schemas";
 import { nodeToken, qrKey } from "@/lib/sign";
-import { AUTO_CLOSE_MS } from "@/lib/time";
 import { endTicket, FACE_ERRORS, faceUnavailable, redeemTicket } from "@/lib/ticket";
 
 export const maxDuration = 60;
@@ -52,7 +51,6 @@ export async function POST(req: Request, { params }: RouteContext<"/api/s/[id]/a
   });
   if (!res.rowsAffected) return fail(409, already);
   await endTicket(t);
-  // markedAt doubles as the server's clock for this phone's codes; `until` is when the session auto-closes.
-  const until = Math.min((s.startedAt ?? markedAt) + AUTO_CLOSE_MS, s.closesAt);
-  return Response.json({ ok: true, markedAt, node: nodeToken(id, t.node), qr: { key: qrKey(id, t.node), node: t.node, until } });
+  // markedAt doubles as the server's clock for this phone's codes; `until` is when the session closes.
+  return Response.json({ ok: true, markedAt, node: nodeToken(id, t.node), qr: { key: qrKey(id, t.node), node: t.node, until: s.closesAt } });
 }

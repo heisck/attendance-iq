@@ -7,8 +7,8 @@ export default async function CoursePage({ params }: PageProps<"/lecturer/course
   const [courses, sessions, students, marks] = await Promise.all([listCourses(), listSessions(), listStudents(id), courseMarks(id)]);
   const course = courses.find((c) => c.id === id);
   if (!course) notFound();
-  // One column per attendance session that has opened (pressed Start), in week order. One whose window
-  // passed without a Start wasn't held, so it doesn't count everyone absent.
+  // One column per attendance session that has opened (by itself or on Start), in week order. One that's
+  // still ahead, or was stopped before it opened, wasn't held, so it doesn't count everyone absent.
   const columns = sessions
     .filter((s) => s.courseId === id && s.kind === "attendance" && s.startedAt)
     .sort((a, b) => a.week - b.week || a.opensAt - b.opensAt)

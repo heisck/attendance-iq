@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { LOGO_H, LOGO_PATHS, LOGO_W } from "./logoPaths";
 
 // Load splash: snakes slide in along the grid from the screen edges, one after
@@ -13,6 +13,9 @@ const HOLD = 600; // ms the finished logo rests before flying
 const FLY = 900; // ms
 
 const INK = "#000";
+
+// localStorage key: set the first time the splash plays, so it shows once per device.
+export const SPLASH_SEEN = "aiq-splash-seen";
 
 type Cell = [number, number];
 
@@ -70,13 +73,27 @@ function approach(piece: Cell[], view: { x0: number; y0: number; x1: number; y1:
   return [...route.slice(0, -1), ...piece];
 }
 
+// True once the splash has revealed the page, or straight away if there is none (seen before,
+// client-side navigation). Page effects that must not run under the splash wait for this.
+function subscribe(onChange: () => void) {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-splash"] });
+  observer.observe(document.body, { childList: true });
+  return () => observer.disconnect();
+}
+const revealed = () => document.documentElement.dataset.splash === "done" || !document.querySelector(".splash");
+export const useSplashDone = () => useSyncExternalStore(subscribe, revealed, () => false);
+
 export function Splash() {
   const [phase, setPhase] = useState<"build" | "fly" | "done">("build");
   const inkRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    // Hidden by CSS under reduced motion.
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // Hidden by CSS under reduced motion, and on devices that have already seen it.
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || "splashSeen" in document.documentElement.dataset) return;
+    try {
+      localStorage.setItem(SPLASH_SEEN, "1");
+    } catch {}
 
     const w = window.innerWidth;
     const h = window.innerHeight;

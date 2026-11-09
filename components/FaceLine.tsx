@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useSplashDone } from "./Splash";
 
 // Single-line face portrait, traced by hand from the sign-in artwork.
 // The line redraws itself on a loop with a "shooting star" head (see .face-* in globals.css).
@@ -21,18 +21,9 @@ const FINDERS = [
   [580, 825],
 ];
 
-// Drawing starts when the load splash reveals the page, or straight away if there is
-// no splash (client-side navigation). Held in React so re-renders can't reset it.
-function subscribe(onChange: () => void) {
-  const observer = new MutationObserver(onChange);
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-splash"] });
-  observer.observe(document.body, { childList: true });
-  return () => observer.disconnect();
-}
-const revealed = () => document.documentElement.dataset.splash === "done" || !document.querySelector(".splash");
-
 export function FaceLine({ className }: { className?: string }) {
-  const drawing = useSyncExternalStore(subscribe, revealed, () => false);
+  // Drawing starts when the load splash reveals the page.
+  const drawing = useSplashDone();
   return (
     <svg className={`${className ?? ""}${drawing ? " face-drawing" : ""}`} viewBox="0 0 660 880" aria-hidden="true">
       {BLOBS.map((d) => (
