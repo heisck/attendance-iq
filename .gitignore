@@ -44,3 +44,7 @@ local.db
 
 # python
 __pycache__/
+
+# face bench: models and your own captures, never committed
+face/.models/
+face/.bench/
