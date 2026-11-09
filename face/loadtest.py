@@ -25,7 +25,7 @@ n = int(sys.argv[2]) if len(sys.argv) > 2 else 1000
 colors = [[255, 40, 40], [40, 255, 40], [40, 80, 255], [255, 255, 40], [255, 40, 255], [40, 80, 255], [40, 255, 40], [255, 255, 255]]
 body = json.dumps({
     "frames": [frame] * 4, "track": [frame] * 42, "marks": [4, 8, 40, 41], "times": list(range(-1000, 3200, 100)),
-    "colors": colors, "oval": {"x": 0.5, "y": 0.47, "w": 0.68}, "smiles": [1500],
+    "colors": colors, "oval": {"x": 0.5, "y": 0.47, "w": 0.68},
 }).encode()
 
 

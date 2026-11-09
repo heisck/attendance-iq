@@ -31,7 +31,6 @@ export const endTicket = (t: Issued) => spend(`t:${t.id}`, MAX_TRIES);
 export const FACE_ERRORS = {
   no_face: "We lost your face partway. Keep your face in the oval the whole time, and try again.",
   approach: "We couldn't see you come closer. Bring the phone in until your face fills the oval.",
-  smile: "We couldn't see you smile when asked. Smile as soon as it says \u201cSmile now\u201d, and relax when it says \u201cRelax\u201d.",
   flash: "We couldn't see the screen's light on your face. Get out of direct sunlight, turn your screen brightness up, and try again.",
   same_face: "A different face appeared during the check. One person at a time, please.",
   spoof: "That looked like a photo or a screen. Use your own face, live.",
@@ -41,7 +40,9 @@ export const FACE_ERRORS = {
 // For outcomes that aren't the student's fault (the face service down, a face we couldn't place).
 export const refundTry = (t: Issued) => refund(`t:${t.id}`);
 
-export async function faceUnavailable(t: Issued) {
+// error: why the face service call failed, logged (message only) so "busy" can be traced.
+export async function faceUnavailable(t: Issued, error: unknown) {
+  console.error(`face service unavailable: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`);
   await refundTry(t);
   return fail(503, "Face check is busy. Wait a few seconds and try again.");
 }
