@@ -63,7 +63,7 @@ def challenge():
     smiles = [ms(-400, 3600)]
     if secrets.randbelow(2):
         smiles.append(smiles[0] + SMILE_MS + ms(1200, 2400))
-    return colors, {"x": between(0.4, 0.6), "y": between(0.42, 0.52), "w": between(0.66, 0.76)}, smiles
+    return colors, {"x": 0.5, "y": 0.46, "w": between(0.66, 0.76)}, smiles
 
 
 def noise(img, sigma):

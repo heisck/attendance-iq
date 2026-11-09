@@ -70,7 +70,7 @@ Chain depth is unlimited. The rotating code is what protects it.
 
 All on the server (Modal). The phone only captures frames.
 
-1. The ticket carries a random challenge (`lib/challenge.ts`, picked with Web Crypto): 8 screen colours, an oval at a random spot and size, and one or two smiles at random moments anywhere in the check (so the check's length varies too).
+1. The ticket carries a random challenge (`lib/challenge.ts`, picked with Web Crypto): 8 screen colours, an oval of random size, centred where the small one was (it grows straight out), and one or two smiles at random moments anywhere in the check (so the check's length varies too).
 2. The student starts at arm's length in a small oval with the screen white (a ring light in a dim room), then the screen shows the colours, 400 ms each (2.5 changes a second, under WCAG's 3-flashes limit, with soft transitions), while they bring the phone closer until their face fills the challenge's oval. About 4 seconds in all. No turning.
 3. The phone uploads 4 frames (300×400, ~20–30 KB each: the 3:4 area the preview shows; 2 far, 2 close in the last colour, white) plus a small snapshot every 100 ms (~42 × 4–7 KB), each with its time from the flash start, and the scan ticket. These endpoints' body limit is ~1.2 MB; every other endpoint uses the default 32 KB.
 4. The server checks that:

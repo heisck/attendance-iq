@@ -8,7 +8,7 @@ Models (all run through OpenCV's DNN module on CPU, permissive licenses):
 The check (components/FaceCheck.tsx films it, the ticket fixes the challenge):
   1. far    about a second in a small oval, the screen white. Two sharp frames.
   2. flash  the screen shows a random colour sequence the server picked, while the student brings the
-            phone closer until their face fills a big oval at a random spot. Two sharp frames at the end.
+            phone closer until their face fills a big oval (centred, random size). Two sharp frames at the end.
   A small snapshot every 100 ms through both, each with its time from the flash start.
 Then, all on the server:
   continuity  one face in every snapshot, never jumping (photos swapped in front of the camera fail)

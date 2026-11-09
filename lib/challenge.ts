@@ -48,5 +48,6 @@ export function pickChallenge(): Challenge {
   const ms = (lo: number, hi: number) => lo + random((hi - lo) / 100 + 1) * 100;
   const smiles = [ms(-400, 3600)];
   if (random(2)) smiles.push(smiles[0] + SMILE_MS + ms(1200, 2400));
-  return { colors, oval: { x: between(0.4, 0.6), y: between(0.42, 0.52), w: between(0.66, 0.76) }, smiles };
+  // The big oval grows from the small one's centre (FaceCheck's FAR_OVAL), straight out; only its size varies.
+  return { colors, oval: { x: 0.5, y: 0.46, w: between(0.66, 0.76) }, smiles };
 }
