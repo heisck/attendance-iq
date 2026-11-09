@@ -70,7 +70,7 @@ Chain depth is unlimited. The rotating code is what protects it.
 
 All on the server (Modal). The phone only captures frames.
 
-1. The ticket carries a random challenge (`lib/challenge.ts`, picked with Web Crypto): 8 screen colours and an oval at a random spot and size.
+1. The ticket carries a random challenge (`lib/challenge.ts`, picked with Web Crypto): 8 screen colours, an oval at a random spot and size, and one or two smiles at random moments anywhere in the check (so the check's length varies too).
 2. The student starts at arm's length in a small oval with the screen white (a ring light in a dim room), then the screen shows the colours, 400 ms each (2.5 changes a second, under WCAG's 3-flashes limit, with soft transitions), while they bring the phone closer until their face fills the challenge's oval. About 4 seconds in all. No turning.
 3. The phone uploads 4 frames (300×400, ~20–30 KB each: the 3:4 area the preview shows; 2 far, 2 close in the last colour, white) plus a small snapshot every 100 ms (~42 × 4–7 KB), each with its time from the flash start, and the scan ticket. These endpoints' body limit is ~1.2 MB; every other endpoint uses the default 32 KB.
 4. The server checks that:
@@ -78,9 +78,10 @@ All on the server (Modal). The phone only captures frames.
    - the face grew and ended up in the challenge's oval (a pre-recorded clip doesn't line up),
    - coming closer changed the face's proportions the way a real head does (the nose is nearer the lens than the cheeks); a photo or a screen only gets bigger. **Shadow mode** (`DEPTH = None`): scored and logged, not enforced, until real checks separate faces from photos (first real checks: −0.01 to +0.10 from YuNet's 5 landmarks, too noisy),
    - the face's colour followed the screen's sequence, measured against the background so the camera's auto white balance cancels out (a replayed video or a virtual camera never saw those colours). **Shadow mode** (`FLASH = None`) until phone checks give a bar (a laptop screen ~60 cm away scored 0–0.46),
-   - every frame shows the same face, and an anti-spoof model doesn't flag a print or a screen,
+   - at each "Smile now" (2 s to do it, then "Relax") the mouth widened, and not before the cue, and relaxed after: mouth width over eye distance against the student's own neutral (`SMILE`). A recorded video can't know when; swapping videos to catch the moment breaks continuity,
+   - every frame shows the same face, and two anti-spoof models (MiniFASNet V2 and V1SE, whose wider crop can take in a held-up phone's edges; averaged) don't flag a print or a screen,
    - the face matches a registered embedding (see attendance above).
-5. YuNet also runs on the phone (onnxruntime-web, the runtime from jsDelivr, ~3.8 MB compressed, cached after the first time) for hints only: "move closer", "centre your face", "too dark". It holds the Start button until the face sits in the oval. Nothing it says is trusted; until it loads, or where it can't run, the check works without hints.
+5. YuNet also runs on the phone (onnxruntime-web, the runtime from jsDelivr, ~3.8 MB compressed, cached after the first time). It gives hints ("move closer", "centre your face", "too dark"; in a dark room it turns the screen white before the check), holds the Start button until a face sits in the oval, and stops a running check when the face is missing for ~1 s ("Face not detected"), so an empty or badly aimed check never reaches the face service. It decides nothing about liveness: the server judges every check. Where it can't load within 8 s, the check runs without it.
 4. Frames are processed in memory and dropped. **Only embeddings are stored. No photos.** (The duplicate-evidence photo stays on the lecturer's device.) Failed checks log numbers only, for tuning.
 
 Matching speed: comparing one embedding against a course's embeddings is a plain loop. 1000 students × 128 floats takes about 1 ms. Embeddings are read fresh from Turso for each registration (a shared cache would cost as much to keep in sync, and a stale one would miss someone registering twice). Turso's vector search is the upgrade path if a single deployment ever passes ~50k students.
@@ -91,7 +92,8 @@ Matching speed: comparing one embedding against a course's embeddings is a plain
 |---|---|
 | Photo of the QR sent to someone at home | Blocked (1 s rotation, 3 s server window) |
 | A printed photo or a phone screen held to the camera | Anti-spoof model only, while depth and colour flash are in shadow mode. Weaker than the old turn challenge until one of them is enforced. |
-| A pre-recorded video of the student, held up or through a virtual camera | **Not blocked yet.** The colour flash is built for this (the video never saw the colours; the oval's spot is random) but is in shadow mode. |
+| A pre-recorded video of the student, held up or through a virtual camera | Smile challenge (random moments, 1 or 2): the video can't smile on cue. Tested before the smile check existed: a phone replay passed. Colour flash and depth can't separate replays (the replay phone's glass reflects the colours; a filmed approach has real perspective). |
+| Someone playing a video and pausing/resuming it to follow the cues | Harder (the timing, continuity and on-phone face tracking all have to hold), not blocked. |
 | Faking a "matched" result or replaying an embedding | Blocked (server-side verification) |
 | One person registering as two people | Blocked (duplicate check + lecturer approval) |
 | Live video call relaying the QR code | **Not blocked.** Lecturer sees marks per node. |

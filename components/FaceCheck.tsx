@@ -1,15 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { COLORS, FLASH_MS, type Challenge } from "@/lib/challenge";
+import { COLORS, endMs, FLASH_MS, SMILE_MS, type Challenge } from "@/lib/challenge";
 import { loadYunet, look } from "@/lib/yunet";
 import { Camera } from "./Camera";
 
 // Films the check the server asked for (face/app.py has the full story), then hands it all back to judge:
 // 1. far: about a second in the small oval, the screen white (a ring light in a dim room);
 // 2. flash: the ticket's colours fill the screen while the student brings the phone closer, into the
-//    ticket's oval. The last colour is white; the close frames are taken in it.
-// track: a small snapshot every TRACK_MS throughout, times: each one's ms from the flash start;
+//    ticket's oval. The last colour is white; the close frames are taken in it, and it stays on, held
+//    close, until the last smile is done.
+// Smiles: "Smile now" for SMILE_MS, then "Relax", at the ticket's moments, anywhere in 1 and 2.
+// track: a small snapshot every TRACK_MS through the colours, every 2 x TRACK_MS after them (held still);
+// times: each one's ms from the flash start;
 // frames: sharp pictures, each taken from the same picture as a snapshot (marks).
 // Pictures are raw camera pixels (the preview is mirrored, they aren't). YuNet on the phone only gives hints.
 const FAR_OVAL = { x: 0.5, y: 0.46, w: 0.38 };
@@ -76,9 +79,12 @@ export function FaceCheck({ challenge, onFrames, error }: { challenge: Challenge
   const body = useRef<HTMLDivElement>(null);
   const [stage, setStage] = useState<Stage>("align");
   const [hint, setHint] = useState("");
-  const [hinting, setHinting] = useState(false); // YuNet is running on this phone
+  // YuNet on this phone: loading, running ("on"), or unavailable / too slow to load ("off": no gating).
+  const [guide, setGuide] = useState<"loading" | "on" | "off">("loading");
   const [notReady, setNotReady] = useState(false);
-  const timers = useRef<{ tick?: ReturnType<typeof setInterval>; frame?: number }>({});
+  const [lost, setLost] = useState(false); // the last check stopped because the face left the oval
+  const [cue, setCue] = useState<"" | "smile" | "relax">("");
+  const timers = useRef<{ tick?: ReturnType<typeof setInterval>; frame?: number; run: number }>({ run: 0 });
   // Held in refs so a parent re-render can't restart the capture, and the hint loop sees the live stage.
   const done = useRef(onFrames);
   const stageRef = useRef(stage);
@@ -87,25 +93,47 @@ export function FaceCheck({ challenge, onFrames, error }: { challenge: Challenge
     stageRef.current = stage;
   }, [onFrames, stage]);
 
-  // Hints: YuNet on the live preview, a few times a second, against whichever oval is showing.
+  // Stops a running check without sending it, back to the start.
+  function abort() {
+    timers.current.run++;
+    clearInterval(timers.current.tick);
+    cancelAnimationFrame(timers.current.frame ?? 0);
+    setCue("");
+    setLost(true);
+    setStage("align");
+  }
+
+  // Hints: YuNet on the live preview, a few times a second, against whichever oval is showing. While a
+  // check runs, a face missing from 3 looks in a row (~1 s) stops it: nothing is sent, no face service time
+  // is spent, and a phone held up to the camera has to stay perfectly framed throughout.
   useEffect(() => {
     let stop = false;
-    loadYunet();
+    let misses = 0;
+    // A phone that can't load it within 8 s (slow data, old browser) checks without gating, as before.
+    const slow = setTimeout(() => setGuide((g) => (g === "loading" ? "off" : g)), 8000);
+    loadYunet().then((y) => !y && setGuide("off"));
     (async () => {
       while (!stop) {
         const s = stageRef.current;
         if (s === "checking") break;
         const seen = video.current ? await look(video.current) : null;
         if (stop) break;
-        if (seen) setHinting(true);
+        if (seen) setGuide("on");
         setHint(s === "flash" ? advise(seen, challenge.oval, FIT.close) : advise(seen, FAR_OVAL, FIT.far));
+        misses = seen && !seen.face && (s === "far" || s === "flash") ? misses + 1 : 0;
+        if (misses >= 3) {
+          misses = 0;
+          abort();
+        }
         await new Promise((r) => setTimeout(r, s === "align" ? 250 : 300));
       }
     })();
     return () => {
       stop = true;
+      clearTimeout(slow);
     };
   }, [challenge.oval]);
+
 
   useEffect(() => {
     const t = timers.current;
@@ -118,60 +146,74 @@ export function FaceCheck({ challenge, onFrames, error }: { challenge: Challenge
   function start() {
     if (!video.current || video.current.readyState < 2) return setNotReady(true);
     setNotReady(false);
+    setLost(false);
     setStage("far");
+    const run = ++timers.current.run; // abort() bumps it: this check's ticks and paints then stop
     const capture: Capture = { frames: [], track: [], marks: [], times: [] };
     const flashAt = performance.now() + FAR_MS;
     const end = challenge.colors.length * FLASH_MS;
+    const total = endMs(challenge);
     // The close frames: in the last colour (white), late enough for the camera to have caught up with it.
     const closeAt = [end - 200, end - 100];
-    const ticks = (FAR_MS + end) / TRACK_MS;
+    const ticks = (FAR_MS + total) / TRACK_MS;
 
-    // The screen colour, from the clock on every animation frame (not the 100 ms ticks), so each change
-    // lands within a frame of when the server expects it.
+    // The screen colour and the smile cue, from the clock on every animation frame (not the 100 ms ticks),
+    // so each change lands within a frame of when the server expects it.
+    let shown = "";
     const paint = () => {
+      if (run !== timers.current.run) return;
       const t = performance.now() - flashAt;
       const i = t < 0 ? 0 : challenge.colors[Math.min(Math.floor(t / FLASH_MS), challenge.colors.length - 1)];
       body.current?.style.setProperty("--flash", rgb(i));
       if (t >= 0 && stageRef.current === "far") setStage("flash");
-      if (t < end) timers.current.frame = requestAnimationFrame(paint);
+      const now = challenge.smiles.some((c) => t >= c && t < c + SMILE_MS) ? "smile" : challenge.smiles.some((c) => t >= c + SMILE_MS && t < c + SMILE_MS + 1000) ? "relax" : "";
+      if (now !== shown) setCue((shown = now));
+      if (t < total) timers.current.frame = requestAnimationFrame(paint);
     };
     paint();
 
     let n = 0;
     const tick = () => {
+      if (run !== timers.current.run) return;
       if (n === ticks) {
         clearInterval(timers.current.tick);
         setStage("checking");
         return done.current(capture);
       }
-      const nominal = n * TRACK_MS - FAR_MS;
+      const nominal = n++ * TRACK_MS - FAR_MS;
+      // Held still after the colours: every other tick is plenty, and keeps the upload down.
+      if (nominal >= end && nominal % (2 * TRACK_MS)) return;
       const picture = centre(video.current!);
       capture.track.push(jpeg(picture, TRACK_WIDTH, TRACK_QUALITY));
       capture.times.push(Math.round(performance.now() - flashAt));
       if (FAR_AT.includes(nominal) || closeAt.includes(nominal)) {
-        capture.marks.push(n);
+        capture.marks.push(capture.track.length - 1);
         capture.frames.push(jpeg(picture, WIDTH, QUALITY));
       }
-      n++;
     };
     tick();
     timers.current.tick = setInterval(tick, TRACK_MS);
   }
 
   const oval = stage === "flash" || stage === "checking" ? challenge.oval : FAR_OVAL;
-  const lit = stage !== "align";
+  const dark = hint.startsWith("Too dark");
+  // Lit while checking, and before it in a dark room: the screen's white light helps find the face.
+  const lit = stage !== "align" || dark;
   const caption =
     stage === "checking"
       ? "Checking…"
-      : stage === "flash"
-        ? hint || (hinting ? "Hold still" : "Bring the phone closer to fill the oval")
+      : cue === "smile"
+        ? "Smile now"
+        : cue === "relax"
+          ? "Relax"
+          : stage === "flash"
+        ? hint || (guide === "on" ? "Hold still" : "Bring the phone closer to fill the oval")
         : stage === "far"
           ? "Hold still…"
           : hint || "Fit your face in the oval";
-  // Before starting, YuNet (when it runs here) holds the button while it sees a face in the wrong place.
-  // Not when it sees none or it's dark: the screen only lights up once started, and a phone whose YuNet
-  // misses faces mustn't lock anyone out.
-  const blocked = stage === "align" && hinting && ["Move closer", "Move back a little", "Centre your face in the oval"].includes(hint);
+  // Before starting, the button waits for YuNet and then for a face in the oval: no check starts on an empty
+  // oval, so none reaches the face service. Where YuNet can't run, it doesn't wait.
+  const blocked = stage === "align" && (guide === "loading" || (guide === "on" && hint !== ""));
 
   return (
     <>
@@ -191,13 +233,28 @@ export function FaceCheck({ challenge, onFrames, error }: { challenge: Challenge
         )}
         <ul className="face-tips">
           <li>Turn your screen brightness up. No cap or sunglasses.</li>
-          <li>Start at arm&apos;s length. The screen then changes colour for about 3 seconds while you bring the phone closer.</li>
+          <li>Start at arm&apos;s length. The screen changes colour while you bring the phone closer.</li>
+          <li>Smile only when it says &ldquo;Smile now&rdquo;, then relax.</li>
         </ul>
         {notReady && <p className="notice">The camera is still starting. Try again in a moment.</p>}
+        {lost && stage === "align" && (
+          <p className="notice notice-danger" role="alert">
+            Face not detected, so the check stopped. Keep your face in the oval the whole time, then start again.
+          </p>
+        )}
       </div>
-      <div className="phone-foot">
+      {/* Above the light when it's on before the check (a dark room), so the button stays reachable. */}
+      <div className="phone-foot" data-lit={(lit && stage === "align") || undefined}>
         <button className="btn btn-ink btn-block" disabled={stage !== "align" || blocked} onClick={start}>
-          {stage === "align" ? (blocked ? hint : "Start face check") : stage === "checking" ? "Checking…" : "Keep going…"}
+          {stage !== "align"
+            ? stage === "checking"
+              ? "Checking…"
+              : "Keep going…"
+            : guide === "loading"
+              ? "Getting the face guide ready…"
+              : blocked
+                ? hint
+                : "Start face check"}
         </button>
       </div>
     </>

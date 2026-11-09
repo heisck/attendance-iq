@@ -20,7 +20,7 @@ export const MARGIN = 0.1;
 // detail: the check's scores (numbers only), for the one log entry the caller writes on a pass.
 export type FaceResult =
   | { ok: true; embedding: Float32Array; detail?: object }
-  | { ok: false; reason: "no_face" | "approach" | "flash" | "same_face" | "spoof" | "continuity" };
+  | { ok: false; reason: "no_face" | "approach" | "smile" | "flash" | "same_face" | "spoof" | "continuity" };
 
 async function call(body: object) {
   const json = JSON.stringify(body);
@@ -47,7 +47,7 @@ async function call(body: object) {
 
 export async function checkFace(challenge: Challenge, capture: { frames: string[]; track: string[]; marks: number[]; times: number[] }): Promise<FaceResult> {
   const { frames, track, marks, times } = capture;
-  const r = await call({ frames, track, marks, times, colors: challenge.colors.map((i) => COLORS[i]), oval: challenge.oval });
+  const r = await call({ frames, track, marks, times, colors: challenge.colors.map((i) => COLORS[i]), oval: challenge.oval, smiles: challenge.smiles });
   // Numbers only (each check's scores), for tuning the knobs in face/app.py. No images are kept.
   if (!r.ok) console.warn(`face check failed: ${r.reason}${r.detail ? ` ${JSON.stringify(r.detail)}` : ""}`);
   // A pass is logged once by the caller, together with what it did next (match score, or registered).

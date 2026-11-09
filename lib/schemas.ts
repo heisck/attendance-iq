@@ -16,19 +16,20 @@ const honeypot = { company: z.string().max(200).optional() };
 
 export const loginSchema = z.object({ email: z.string().max(200), password: z.string().max(200), ...honeypot });
 
-// Base64 JPEGs: frames ~20-30 KB each (2 far, 2 close); track, a small snapshot every 100 ms (~4-7 KB),
-// times, each snapshot's ms from the flash start; marks, the snapshot each frame was taken with.
+// Base64 JPEGs: frames ~20-30 KB each (2 far, 2 close); track, a small snapshot every 100 ms through the
+// colours, every 200 ms after (~4-7 KB, up to ~95); times, each snapshot's ms from the flash start; marks,
+// the snapshot each frame was taken with. The challenge itself is in lib/challenge.ts.
 const FRAME = 60_000;
 const SNAPSHOT = 16_000;
 const face = {
   frames: z.array(z.string().max(FRAME)).min(3).max(8),
-  track: z.array(z.string().max(SNAPSHOT)).min(10).max(60),
-  times: z.array(z.number().int().min(-5_000).max(10_000)).max(60),
-  marks: z.array(z.number().int().min(0).max(59)).max(8),
+  track: z.array(z.string().max(SNAPSHOT)).min(10).max(100),
+  times: z.array(z.number().int().min(-5_000).max(20_000)).max(100),
+  marks: z.array(z.number().int().min(0).max(99)).max(8),
 };
 // Body limit for the face routes: everything the fields above allow, plus room for the rest. A fixed
 // smaller cap rejected valid checks from noisy phone cameras (noise makes JPEGs bigger) as "too large".
-export const FACE_BODY = 8 * FRAME + 60 * SNAPSHOT + 8_000;
+export const FACE_BODY = 8 * FRAME + 100 * SNAPSHOT + 8_000;
 
 export const ticketSchema = z.object({ code: z.string().max(200).optional(), node: z.string().max(100).optional() });
 

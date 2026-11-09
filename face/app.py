@@ -18,7 +18,9 @@ Then, all on the server:
   flash       the face's colour followed the screen's colour sequence (a replayed video or a virtual camera
               can't, it never saw those colours); measured against the background, which the screen
               barely lights, so the camera's auto white balance cancels out
-  spoof       MiniFASNet on the far frames
+  smile       at the ticket's random moments (anywhere in the check), the mouth widened when asked and
+              not before, then relaxed; a recorded video can't know when, and swapping videos breaks continuity
+  spoof       MiniFASNet V2 and V1SE (a wider crop, which can take in a held-up phone's edges) on the far frames
   same face   every sharp frame is the same person as the close frames, whose mean is the embedding
 
 Deploy:  modal deploy face/app.py
@@ -34,6 +36,7 @@ MODELS = {
     "yunet.onnx": "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
     "sface.onnx": "https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx",
     "fas.onnx": "https://github.com/yakhyo/face-anti-spoofing/releases/download/weights/MiniFASNetV2.onnx",
+    "fas2.onnx": "https://github.com/yakhyo/face-anti-spoofing/releases/download/weights/MiniFASNetV1SE.onnx",
 }
 
 # Tuning knobs. Provisional until the bench and real classes give numbers; every result carries its scores.
@@ -52,7 +55,12 @@ FLASH_MS = 400  # each colour's time on screen (FaceCheck.tsx)
 FLASH = None
 LAGS = range(0, 401, 50)  # ms the camera may run behind the screen
 SAME_FACE = 0.20  # min cosine between any frame and the mean embedding (close-up distortion scores lower)
-REAL = 0.50  # min mean anti-spoof "real" probability over the far frames
+REAL = 0.50  # min mean anti-spoof "real" probability over the far frames (both models averaged)
+# Smile: the mouth's width over the eye distance, against the student's own neutral (everything outside the
+# smile windows). Provisional until bench captures of real smiles and replays set it.
+SMILE = 0.08  # min widening while asked (every smile)
+SMILE_MS = 2000  # the window to smile in (lib/challenge.ts)
+RELAX_MS = 1400  # after the last smile (lib/challenge.ts)
 MIN_FACE = 64  # px in a sharp frame; smaller faces are too far away to judge (a far face filling the small oval is ~80)
 # Continuity: one face in every snapshot (every 100 ms), never leaving and never jumping.
 TRACK_GAP = 2  # snapshots in a row allowed without a face (a blur); a hand swapping photos hides it longer
@@ -85,6 +93,7 @@ class Models:
         self.det = cv2.FaceDetectorYN.create(f"{path}/yunet.onnx", "", (320, 320), 0.8)
         self.rec = cv2.FaceRecognizerSF.create(f"{path}/sface.onnx", "")
         self.fas = cv2.dnn.readNetFromONNX(f"{path}/fas.onnx")
+        self.fas2 = cv2.dnn.readNetFromONNX(f"{path}/fas2.onnx")
 
 
 _local = threading.local()
@@ -109,9 +118,9 @@ def detect(m: Models, img):
 
 
 def shape(face):
-    """Where the face is and its proportions: centre, size, yaw, and the two depth ratios."""
+    """Where the face is and its proportions: centre, size, yaw, the two depth ratios and the mouth's width."""
     x, y, bw, bh = face[:4]
-    eye_r, eye_l, nose = face[4:10].reshape(3, 2)
+    eye_r, eye_l, nose, mouth_r, mouth_l = face[4:14].reshape(5, 2)
     eyes = (eye_r + eye_l) / 2
     eye_dist = max(float(np.linalg.norm(eye_l - eye_r)), 1.0)
     return {
@@ -124,6 +133,8 @@ def shape(face):
         # and the nose tip (nearest) drops further below the eyes. A flat picture keeps both ratios.
         "spread": eye_dist / float(bw),
         "nose": float(nose[1] - eyes[1]) / eye_dist,
+        # A smile pulls the mouth corners apart; over the eye distance it doesn't change with distance.
+        "mouth": float(np.linalg.norm(mouth_l - mouth_r)) / eye_dist,
     }
 
 
@@ -132,20 +143,24 @@ def frame(m: Models, img):
     if face is None or min(face[2], face[3]) < MIN_FACE:
         return None
     emb = m.rec.feature(m.rec.alignCrop(img, face)).flatten()
+    v2, v1se = real(m.fas, img, face, 2.7), real(m.fas2, img, face, 4.0)
+    return {**shape(face), "emb": emb / np.linalg.norm(emb), "v2": v2, "v1se": v1se, "real": (v2 + v1se) / 2}
 
-    # MiniFASNetV2: 2.7x box crop, 80x80, BGR, raw 0-255 floats, class 1 = real.
+
+def real(net, img, face, scale: float) -> float:
+    """MiniFASNet: a box crop `scale` times the face (as far as the picture allows), 80x80, BGR, raw 0-255
+    floats; class 1 = real. V2 takes 2.7x, V1SE 4.0x, as the Silent-Face models were trained."""
     h, w = img.shape[:2]
     x, y, bw, bh = face[:4]
-    s = min((h - 1) / bh, (w - 1) / bw, 2.7)
+    s = min((h - 1) / bh, (w - 1) / bw, scale)
     cx, cy = x + bw / 2, y + bh / 2
     x1, y1 = max(0, int(cx - bw * s / 2)), max(0, int(cy - bh * s / 2))
     x2, y2 = min(w - 1, int(cx + bw * s / 2)), min(h - 1, int(cy + bh * s / 2))
     crop = cv2.resize(img[y1 : y2 + 1, x1 : x2 + 1], (80, 80)).astype(np.float32)
-    m.fas.setInput(crop.transpose(2, 0, 1)[None])
-    logits = m.fas.forward()[0]
+    net.setInput(crop.transpose(2, 0, 1)[None])
+    logits = net.forward()[0]
     p = np.exp(logits - logits.max())
-
-    return {**shape(face), "emb": emb / np.linalg.norm(emb), "real": float(p[1] / p.sum())}
+    return float(p[1] / p.sum())
 
 
 def grey(img, size=(30, 40)):
@@ -224,10 +239,31 @@ def depth(far, close) -> tuple[float, float]:
     return grow("spread"), grow("nose")
 
 
-def analyze(m: Models, frames: list[bytes], track: list[bytes], marks: list[int], times: list[int], colors: list[list[int]], oval: dict) -> dict:
+def smile(pts, times, smiles) -> dict:
+    """How the mouth followed the smile cues, as widening over the student's own neutral: `smile` the least any
+    asked-for smile reached, `early` the most before a cue, `relax` the most left once it should have gone."""
+    seen = [(t, p["mouth"]) for p, t in zip(pts, times) if p]
+    busy = [(c - 200, c + SMILE_MS + 1000) for c in smiles]  # from the cue until the relax has settled
+    rest = [v for t, v in seen if not any(a <= t < b for a, b in busy)]
+    if len(rest) < 4:
+        return {"smile": 0.0, "early": 0.0, "relax": 0.0}
+    base = float(np.median(rest))
+    widen = lambda lo, hi, q: float(np.quantile(v, q) / base - 1) if (v := [x for t, x in seen if lo <= t < hi]) else None
+    up, early, relax = [], [], []
+    for i, c in enumerate(smiles):
+        up.append(widen(c + 300, c + SMILE_MS, 0.75))  # people take a moment to react
+        early.append(widen(c - 600, c + 200, 0.5))
+        relax.append(widen(c + SMILE_MS + 600, smiles[i + 1] - 600 if i + 1 < len(smiles) else c + SMILE_MS + RELAX_MS, 0.5))
+    # A window with no face in it counts against the student: nothing seen, nothing proven.
+    worst = lambda xs, missing, pick: round(missing if None in xs else pick(xs), 3)
+    return {"smile": worst(up, 0.0, min), "early": worst(early, 9.0, max), "relax": worst(relax, 9.0, max)}
+
+
+def analyze(m: Models, frames: list[bytes], track: list[bytes], marks: list[int], times: list[int], colors: list[list[int]], oval: dict, smiles: list[int]) -> dict:
     """frames: FAR far ones, then close ones. track: snapshots, times: each one's ms from the flash start.
     marks: the snapshot each frame was taken with. colors: the RGB sequence shown. oval: where the close
-    face had to end up, {x, y, w} as shares of the mirrored preview (what the student saw)."""
+    face had to end up, {x, y, w} as shares of the mirrored preview (what the student saw). smiles: when
+    "Smile now" showed, ms from the flash start."""
     thumbs = [decode(t) for t in track]
     full = [decode(f) for f in frames]
     if any(t is None for t in thumbs + full):
@@ -261,11 +297,16 @@ def analyze(m: Models, frames: list[bytes], track: list[bytes], marks: list[int]
         "lag": lag,
         "same": round(min(float(s["emb"] @ emb) for s in seen), 3),
         "real": round(float(np.mean([s["real"] for s in far])), 3),
+        "v2": round(float(np.mean([s["v2"] for s in far])), 3),
+        "v1se": round(float(np.mean([s["v1se"] for s in far])), 3),
+        **smile(pts, times, smiles),
     }
     if scores["closer"] < CLOSER or scores["oval"] > OVAL_SHIFT or not OVAL_FIT[0] <= scores["fit"] <= OVAL_FIT[1]:
         return {"ok": False, "reason": "approach", "detail": scores}
     if scores["same"] < SAME_FACE:
         return {"ok": False, "reason": "same_face", "detail": scores}
+    if scores["smile"] < SMILE or scores["early"] >= SMILE / 2 or scores["relax"] >= SMILE / 2:
+        return {"ok": False, "reason": "smile", "detail": scores}
     if FLASH is not None and scores["flash"] < FLASH:
         return {"ok": False, "reason": "flash", "detail": scores}
     if (DEPTH is not None and scores["depth"] < DEPTH) or scores["real"] < REAL:
@@ -275,25 +316,28 @@ def analyze(m: Models, frames: list[bytes], track: list[bytes], marks: list[int]
 
 
 def valid(body: dict) -> bool:
-    frames, track, marks, times, colors, oval = (body.get(k) for k in ("frames", "track", "marks", "times", "colors", "oval"))
+    frames, track, marks, times, colors, oval, smiles = (body.get(k) for k in ("frames", "track", "marks", "times", "colors", "oval", "smiles"))
     return (
         isinstance(frames, list)
         and FAR < len(frames) <= 8
         and all(isinstance(f, str) and len(f) <= 100_000 for f in frames)
         and isinstance(track, list)
-        and 10 <= len(track) <= 60
+        and 10 <= len(track) <= 100
         and all(isinstance(t, str) and len(t) <= 100_000 for t in track)
         and isinstance(marks, list)
         and len(marks) == len(frames)
         and all(isinstance(i, int) and 0 <= i < len(track) for i in marks)
         and isinstance(times, list)
         and len(times) == len(track)
-        and all(isinstance(t, int) and -5_000 <= t <= 10_000 for t in times)
+        and all(isinstance(t, int) and -5_000 <= t <= 20_000 for t in times)
         and isinstance(colors, list)
         and 3 <= len(colors) <= 16
         and all(isinstance(c, list) and len(c) == 3 and all(isinstance(v, int) and 0 <= v <= 255 for v in c) for c in colors)
         and isinstance(oval, dict)
         and all(isinstance(oval.get(k), (int, float)) and 0 < oval[k] < 1 for k in ("x", "y", "w"))
+        and isinstance(smiles, list)
+        and 1 <= len(smiles) <= 3
+        and all(isinstance(c, int) and -1_000 <= c <= 15_000 for c in smiles)
     )
 
 
@@ -310,7 +354,7 @@ class Face:
         models()
 
     # POST {frames, track, marks, times, colors, oval} (see analyze) -> {ok, reason?, detail?, embedding?}
-    # colors and oval come from the ticket, through Vercel, never from the phone.
+    # colors, oval and smiles come from the ticket, through Vercel, never from the phone.
     # POST {warm: true} wakes a container when the lecturer presses Start.
     # Modal's proxy auth rejects calls without the workspace's Modal-Key/Modal-Secret headers before
     # any container starts, so strangers can't spend the credits.
@@ -321,7 +365,8 @@ class Face:
         if not valid(body):
             raise HTTPException(400)
         b64 = base64.b64decode
-        return analyze(models(), [b64(f) for f in body["frames"]], [b64(t) for t in body["track"]], body["marks"], body["times"], body["colors"], body["oval"])
+        b = body
+        return analyze(models(), [b64(f) for f in b["frames"]], [b64(t) for t in b["track"]], b["marks"], b["times"], b["colors"], b["oval"], b["smiles"])
 
 
 if __name__ == "__main__":
@@ -353,4 +398,14 @@ if __name__ == "__main__":
     far = [{"spread": 0.40, "nose": 0.60}] * 2
     assert np.allclose(depth(far, [{"spread": 0.40 * 1.08, "nose": 0.60 * 1.05}] * 2), (0.08, 0.05))
     assert np.allclose(depth(far, far), (0, 0))
+    # Smile: neutral mouth 0.90, a smile widens it ~17%. Snapshots every 100 ms, then 200 ms after the colours.
+    ts = list(range(-1000, 3200, 100)) + list(range(3200, 9000, 200))
+    def mouths(smile_at):
+        return [{"mouth": 0.90 * (1.17 if any(a + 500 <= t < a + 1900 for a in smile_at) else 1) * rng.uniform(0.98, 1.02)} for t in ts]
+    cues = [500, 3800]
+    live = smile(mouths(cues), ts, cues)
+    late = smile(mouths([1400, 5200]), ts, cues)  # a recording whose smiles land a beat off
+    print(f"smile: live {live}, recording {late}")
+    assert live["smile"] >= SMILE and live["early"] < SMILE / 2 and live["relax"] < SMILE / 2, live
+    assert late["smile"] < SMILE or late["early"] >= SMILE / 2 or late["relax"] >= SMILE / 2, late
     print("ok")

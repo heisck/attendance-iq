@@ -31,6 +31,7 @@ export const endTicket = (t: Issued) => spend(`t:${t.id}`, MAX_TRIES);
 export const FACE_ERRORS = {
   no_face: "We lost your face partway. Keep your face in the oval the whole time, and try again.",
   approach: "We couldn't see you come closer. Bring the phone in until your face fills the oval.",
+  smile: "We couldn't see you smile when asked. Smile as soon as it says \u201cSmile now\u201d, and relax when it says \u201cRelax\u201d.",
   flash: "We couldn't see the screen's light on your face. Get out of direct sunlight, turn your screen brightness up, and try again.",
   same_face: "A different face appeared during the check. One person at a time, please.",
   spoof: "That looked like a photo or a screen. Use your own face, live.",

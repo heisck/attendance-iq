@@ -11,7 +11,7 @@
 
 The check is the phone's (components/FaceCheck.tsx): sit at arm's length with your face in the small oval,
 press SPACE, hold still for a second, then bring your face closer into the big oval while the screen
-changes colour. Q quits. The laptop screen is the light source, as the phone's is, so run it full screen
+changes colour. Smile only when it says SMILE NOW (at a random moment, once or twice), then relax. Q quits. The laptop screen is the light source, as the phone's is, so run it full screen
 with the brightness up. Captures are cut, timed, sized and JPEG-compressed like the phone's, then judged by
 the same analyze() as Modal (face/app.py).
 Filters fake what a phone sees in a dim hall, through a smudged lens, etc. They're applied to the raw
@@ -40,7 +40,7 @@ MATCH = 0.363  # lib/face.ts
 
 # lib/schemas.ts and components/FaceCheck.tsx
 COLORS = [(255, 255, 255), (255, 40, 40), (40, 255, 40), (40, 80, 255), (255, 255, 40), (255, 40, 255), (40, 255, 255)]
-FLASH_MS, SEQUENCE = 400, 8
+FLASH_MS, SEQUENCE, SMILE_MS, RELAX_MS = 400, 8, 2000, 1400
 FAR_OVAL = {"x": 0.5, "y": 0.46, "w": 0.38}
 FAR_MS, TRACK_MS, FAR_AT = 1000, 100, (-600, -200)
 W, H, QUALITY, TRACK_W, TRACK_QUALITY = 300, 400, 75, 160, 60
@@ -59,7 +59,11 @@ def challenge():
         if len({c for c in colors if c}) >= 3:
             break
     between = lambda lo, hi: round(lo + secrets.randbelow(1001) / 1000 * (hi - lo), 3)
-    return colors, {"x": between(0.4, 0.6), "y": between(0.42, 0.52), "w": between(0.66, 0.76)}
+    ms = lambda lo, hi: lo + secrets.randbelow((hi - lo) // 100 + 1) * 100
+    smiles = [ms(-400, 3600)]
+    if secrets.randbelow(2):
+        smiles.append(smiles[0] + SMILE_MS + ms(1200, 2400))
+    return colors, {"x": between(0.4, 0.6), "y": between(0.42, 0.52), "w": between(0.66, 0.76)}, smiles
 
 
 def noise(img, sigma):
@@ -149,7 +153,7 @@ def draw(frame, caption, oval, light=None):
     return cv2.waitKey(1) & 0xFF
 
 
-def capture(cam, colors, oval):
+def capture(cam, colors, oval, smiles):
     """Films the check like FaceCheck: raw W x H snapshots with their times, and which of them are frames."""
     cv2.namedWindow("bench", cv2.WINDOW_NORMAL)
     cv2.setWindowProperty("bench", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
@@ -163,23 +167,31 @@ def capture(cam, colors, oval):
         if key == ord(" "):
             break
     end = len(colors) * FLASH_MS
+    total = max(end + 400, smiles[-1] + SMILE_MS + RELAX_MS)  # lib/challenge.ts endMs
     frame_at = (*FAR_AT, end - 200, end - 100)
     pictures, times, marks = [], [], []
     flash_at = time.monotonic() * 1000 + FAR_MS
-    for n in range((FAR_MS + end) // TRACK_MS):
+    for n in range((FAR_MS + total) // TRACK_MS):
         nominal = n * TRACK_MS - FAR_MS
-        # Keep the preview and the light live between snapshots, then take the next one on the 100 ms grid.
+        if nominal >= end and nominal % (2 * TRACK_MS):  # held still after the colours: every other tick
+            continue
+        # Keep the preview and the light live between snapshots, then take the next one on the grid.
         while True:
             t = time.monotonic() * 1000 - flash_at
             ok, f = cam.read()
             shown = COLORS[0] if t < 0 else COLORS[colors[min(int(t // FLASH_MS), len(colors) - 1)]]
-            draw(f, "Hold still..." if t < 0 else "Bring your face closer to fill the oval", FAR_OVAL if t < 0 else oval, shown)
+            caption = "Hold still..." if t < 0 else "Bring your face closer to fill the oval"
+            if any(c <= t < c + SMILE_MS for c in smiles):
+                caption = "SMILE NOW"
+            elif any(c + SMILE_MS <= t < c + SMILE_MS + 1000 for c in smiles):
+                caption = "Relax"
+            draw(f, caption, FAR_OVAL if t < 0 else oval, shown)
             if t >= nominal:
                 break
         pictures.append(centre(f))
         times.append(round(t))
         if nominal in frame_at:
-            marks.append(n)
+            marks.append(len(pictures) - 1)
     cv2.destroyAllWindows()
     return pictures, times, marks
 
@@ -189,7 +201,7 @@ def judge(c, fx, enrolled):
     track = [jpeg(p, TRACK_W, TRACK_QUALITY) for p in seen]
     frames = [jpeg(seen[i], W, QUALITY) for i in c["marks"]]
     rgb = [list(COLORS[i]) for i in c["colors"]]
-    r = app.analyze(app.models(str(MODELS)), frames, track, c["marks"], c["times"], rgb, c["oval"])
+    r = app.analyze(app.models(str(MODELS)), frames, track, c["marks"], c["times"], rgb, c["oval"], c["smiles"])
     if r.get("ok") and enrolled is not None:
         r["similarity"] = round(float(np.frombuffer(base64.b64decode(r["embedding"]), "<f4") @ enrolled), 3)
     return r
@@ -227,16 +239,18 @@ def main():
 
     if cmd == "replay":
         d = np.load(BENCH / f"{sys.argv[2]}.npz", allow_pickle=True)
+        if "smiles" not in d.files:
+            sys.exit(f"{sys.argv[2]} was captured before the smile check; capture it again.")
         return report({k: d[k].tolist() if k != "pictures" else list(d[k]) for k in d.files} | {"oval": d["oval"].item()}, enrolled)
 
     cam = cv2.VideoCapture(0)
     cam.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     if not cam.isOpened():
         sys.exit("No camera at /dev/video0.")
-    colors, oval = challenge()
-    pictures, times, marks = capture(cam, colors, oval)
+    colors, oval, smiles = challenge()
+    pictures, times, marks = capture(cam, colors, oval, smiles)
     cam.release()
-    c = {"pictures": pictures, "times": times, "marks": marks, "colors": colors, "oval": oval}
+    c = {"pictures": pictures, "times": times, "marks": marks, "colors": colors, "oval": oval, "smiles": smiles}
 
     if cmd == "enroll":
         r = judge(c, FILTERS["clean"], None)
@@ -248,7 +262,7 @@ def main():
         print("Not enrolled yet (uv run face/bench.py enroll): the match column stays empty.")
     if "--save" in sys.argv:
         name = sys.argv[sys.argv.index("--save") + 1]
-        np.savez_compressed(BENCH / f"{name}.npz", pictures=np.array(pictures), times=times, marks=marks, colors=colors, oval=np.array(oval, dtype=object))
+        np.savez_compressed(BENCH / f"{name}.npz", pictures=np.array(pictures), times=times, marks=marks, colors=colors, smiles=smiles, oval=np.array(oval, dtype=object))
         print(f"saved face/.bench/{name}.npz")
     report(c, enrolled)
 

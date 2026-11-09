@@ -2645,6 +2645,9 @@ body:has(.phone) {
   background: var(--flash, #fff);
   transition: background-color 120ms linear;
 }
+.phone-foot[data-lit] {
+  z-index: 52;
+}
 .camera[data-lit] {
   position: fixed;
   z-index: 51;
