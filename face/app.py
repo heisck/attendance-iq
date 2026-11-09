@@ -4,6 +4,7 @@ Models (all run through OpenCV's DNN module on CPU, permissive licenses):
   YuNet       face box + 5 landmarks             MIT         (opencv_zoo)
   SFace       128-d face embedding               Apache-2.0  (opencv_zoo)
   MiniFASNet  print / screen anti-spoof          MIT         (yakhyo/face-anti-spoofing, from minivision Apache-2.0)
+  FER         facial expression (smile = happy)  Apache-2.0  (opencv_zoo, MobileFaceNet on RAF-DB)
 
 The check (components/FaceCheck.tsx films it, the ticket fixes the challenge):
   1. far    about a second in a small oval, the screen white. Two sharp frames.
@@ -18,8 +19,9 @@ Then, all on the server:
   flash       the face's colour followed the screen's colour sequence (a replayed video or a virtual camera
               can't, it never saw those colours); measured against the background, which the screen
               barely lights, so the camera's auto white balance cancels out
-  smile       at the ticket's random moments (anywhere in the check), the mouth widened when asked and
-              not before, then relaxed; a recorded video can't know when, and swapping videos breaks continuity
+  smile       at the ticket's random moments (anywhere in the check), the expression model saw a smile when
+              asked and not before, then saw it go; a recorded video can't know when, and swapping videos
+              breaks continuity
   spoof       MiniFASNet V2 and V1SE (a wider crop, which can take in a held-up phone's edges) on the far frames
   same face   every sharp frame is the same person as the close frames, whose mean is the embedding
 
@@ -37,6 +39,7 @@ MODELS = {
     "sface.onnx": "https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx",
     "fas.onnx": "https://github.com/yakhyo/face-anti-spoofing/releases/download/weights/MiniFASNetV2.onnx",
     "fas2.onnx": "https://github.com/yakhyo/face-anti-spoofing/releases/download/weights/MiniFASNetV1SE.onnx",
+    "fer.onnx": "https://github.com/opencv/opencv_zoo/raw/main/models/facial_expression_recognition/facial_expression_recognition_mobilefacenet_2022july.onnx",
 }
 
 # Tuning knobs. Provisional until the bench and real classes give numbers; every result carries its scores.
@@ -56,9 +59,10 @@ FLASH = None
 LAGS = range(0, 401, 50)  # ms the camera may run behind the screen
 SAME_FACE = 0.20  # min cosine between any frame and the mean embedding (close-up distortion scores lower)
 REAL = 0.50  # min mean anti-spoof "real" probability over the far frames (both models averaged)
-# Smile: the mouth's width over the eye distance, against the student's own neutral (everything outside the
-# smile windows). Provisional until bench captures of real smiles and replays set it.
-SMILE = 0.08  # min widening while asked (every smile)
+# Smile: the expression model's "happy" as log-odds, against the student's own neutral (everything outside
+# the smile windows), so a face that looks cheerful at rest still has to smile more when asked. YuNet's mouth
+# corners were tried first and barely moved with a real, teeth-showing smile.
+SMILE = 2.0  # min rise in happy log-odds while asked (every smile); also needs happy over even odds then
 SMILE_MS = 2000  # the window to smile in (lib/challenge.ts)
 RELAX_MS = 1400  # after the last smile (lib/challenge.ts)
 MIN_FACE = 64  # px in a sharp frame; smaller faces are too far away to judge (a far face filling the small oval is ~80)
@@ -94,6 +98,7 @@ class Models:
         self.rec = cv2.FaceRecognizerSF.create(f"{path}/sface.onnx", "")
         self.fas = cv2.dnn.readNetFromONNX(f"{path}/fas.onnx")
         self.fas2 = cv2.dnn.readNetFromONNX(f"{path}/fas2.onnx")
+        self.fer = cv2.dnn.readNet(f"{path}/fer.onnx")
 
 
 _local = threading.local()
@@ -118,9 +123,9 @@ def detect(m: Models, img):
 
 
 def shape(face):
-    """Where the face is and its proportions: centre, size, yaw, the two depth ratios and the mouth's width."""
+    """Where the face is and its proportions: centre, size, yaw and the two depth ratios."""
     x, y, bw, bh = face[:4]
-    eye_r, eye_l, nose, mouth_r, mouth_l = face[4:14].reshape(5, 2)
+    eye_r, eye_l, nose = face[4:10].reshape(3, 2)
     eyes = (eye_r + eye_l) / 2
     eye_dist = max(float(np.linalg.norm(eye_l - eye_r)), 1.0)
     return {
@@ -133,9 +138,17 @@ def shape(face):
         # and the nose tip (nearest) drops further below the eyes. A flat picture keeps both ratios.
         "spread": eye_dist / float(bw),
         "nose": float(nose[1] - eyes[1]) / eye_dist,
-        # A smile pulls the mouth corners apart; over the eye distance it doesn't change with distance.
-        "mouth": float(np.linalg.norm(mouth_l - mouth_r)) / eye_dist,
     }
+
+
+def happy(m: Models, img, face) -> float:
+    """The expression model's "happy" as log-odds against the other six: about +5 for a broad smile, below
+    0 at rest. Same 112x112 alignment as SFace; RGB, scaled to -1..1 (opencv_zoo's facial_fer_model.py)."""
+    a = cv2.cvtColor(m.rec.alignCrop(img, face), cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+    m.fer.setInput(cv2.dnn.blobFromImage((a - 0.5) / 0.5))
+    z = m.fer.forward()[0].astype(np.float64)
+    others = np.delete(z, 3)
+    return float(z[3] - (others.max() + np.log(np.exp(others - others.max()).sum())))
 
 
 def frame(m: Models, img):
@@ -240,15 +253,17 @@ def depth(far, close) -> tuple[float, float]:
 
 
 def smile(pts, times, smiles) -> dict:
-    """How the mouth followed the smile cues, as widening over the student's own neutral: `smile` the least any
-    asked-for smile reached, `early` the most before a cue, `relax` the most left once it should have gone."""
-    seen = [(t, p["mouth"]) for p, t in zip(pts, times) if p]
+    """How the expression followed the smile cues, as happy log-odds over the student's own neutral: `smile` the
+    least any asked-for smile rose, `early` the most before a cue, `relax` the most left once it should have
+    gone; `smiling` how happy the weakest smile looked outright (log-odds, above 0 = more likely than not)."""
+    seen = [(t, p["happy"]) for p, t in zip(pts, times) if p]
     busy = [(c - 200, c + SMILE_MS + 1000) for c in smiles]  # from the cue until the relax has settled
     rest = [v for t, v in seen if not any(a <= t < b for a, b in busy)]
     if len(rest) < 4:
-        return {"smile": 0.0, "early": 0.0, "relax": 0.0}
+        return {"smile": 0.0, "early": 0.0, "relax": 0.0, "smiling": 0.0}
     base = float(np.median(rest))
-    widen = lambda lo, hi, q: float(np.quantile(v, q) / base - 1) if (v := [x for t, x in seen if lo <= t < hi]) else None
+    level = lambda lo, hi, q: float(np.quantile(v, q)) if (v := [x for t, x in seen if lo <= t < hi]) else None
+    widen = lambda lo, hi, q: None if (v := level(lo, hi, q)) is None else v - base
     up, early, relax = [], [], []
     for i, c in enumerate(smiles):
         up.append(widen(c + 300, c + SMILE_MS, 0.75))  # people take a moment to react
@@ -257,8 +272,9 @@ def smile(pts, times, smiles) -> dict:
         # second smile soon after can't squeeze it to nothing.
         relax.append(widen(c + SMILE_MS + 400, c + SMILE_MS + 1000, 0.5))
     # A window with no face in it counts against the student: nothing seen, nothing proven.
-    worst = lambda xs, missing, pick: round(missing if None in xs else pick(xs), 3)
-    return {"smile": worst(up, 0.0, min), "early": worst(early, 9.0, max), "relax": worst(relax, 9.0, max)}
+    worst = lambda xs, missing, pick: round(missing if None in xs else pick(xs), 2)
+    smiling = [level(c + 300, c + SMILE_MS, 0.75) for c in smiles]
+    return {"smile": worst(up, 0.0, min), "early": worst(early, 99.0, max), "relax": worst(relax, 99.0, max), "smiling": worst(smiling, -99.0, min)}
 
 
 def analyze(m: Models, frames: list[bytes], track: list[bytes], marks: list[int], times: list[int], colors: list[list[int]], oval: dict, smiles: list[int]) -> dict:
@@ -270,7 +286,7 @@ def analyze(m: Models, frames: list[bytes], track: list[bytes], marks: list[int]
     full = [decode(f) for f in frames]
     if any(t is None for t in thumbs + full):
         return {"ok": False, "reason": "continuity", "detail": {"error": "bad picture"}}
-    pts = [None if (f := detect(m, t)) is None else shape(f) for t in thumbs]
+    pts = [None if (f := detect(m, t)) is None else {**shape(f), "happy": happy(m, t, f)} for t in thumbs]
     broken = continuity(pts, thumbs, full, marks)
     if broken:
         return broken
@@ -307,7 +323,7 @@ def analyze(m: Models, frames: list[bytes], track: list[bytes], marks: list[int]
         return {"ok": False, "reason": "approach", "detail": scores}
     if scores["same"] < SAME_FACE:
         return {"ok": False, "reason": "same_face", "detail": scores}
-    if scores["smile"] < SMILE or scores["early"] >= SMILE / 2 or scores["relax"] >= SMILE / 2:
+    if scores["smile"] < SMILE or scores["smiling"] <= 0 or scores["early"] >= SMILE / 2 or scores["relax"] >= SMILE / 2:
         return {"ok": False, "reason": "smile", "detail": scores}
     if FLASH is not None and scores["flash"] < FLASH:
         return {"ok": False, "reason": "flash", "detail": scores}
@@ -400,14 +416,14 @@ if __name__ == "__main__":
     far = [{"spread": 0.40, "nose": 0.60}] * 2
     assert np.allclose(depth(far, [{"spread": 0.40 * 1.08, "nose": 0.60 * 1.05}] * 2), (0.08, 0.05))
     assert np.allclose(depth(far, far), (0, 0))
-    # Smile: neutral mouth 0.90, a smile widens it ~17%. Snapshots every 100 ms, then 200 ms after the colours.
+    # Smile: happy log-odds about -3 at rest, +4 smiling. Snapshots every 100 ms, then 200 ms after the colours.
     ts = list(range(-1000, 3200, 100)) + list(range(3200, 9000, 200))
     def mouths(smile_at):
-        return [{"mouth": 0.90 * (1.17 if any(a + 500 <= t < a + 1900 for a in smile_at) else 1) * rng.uniform(0.98, 1.02)} for t in ts]
+        return [{"happy": (4.0 if any(a + 500 <= t < a + 1900 for a in smile_at) else -3.0) + rng.normal(0, 0.5)} for t in ts]
     cues = [500, 3700]  # the tightest gap: 2 s window + 1.2 s
     live = smile(mouths(cues), ts, cues)
     late = smile(mouths([1400, 5200]), ts, cues)  # a recording whose smiles land a beat off
     print(f"smile: live {live}, recording {late}")
-    assert live["smile"] >= SMILE and live["early"] < SMILE / 2 and live["relax"] < SMILE / 2, live
+    assert live["smile"] >= SMILE and live["smiling"] > 0 and live["early"] < SMILE / 2 and live["relax"] < SMILE / 2, live
     assert late["smile"] < SMILE or late["early"] >= SMILE / 2 or late["relax"] >= SMILE / 2, late
     print("ok")
