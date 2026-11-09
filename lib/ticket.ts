@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { fail } from "./api";
 import { newId } from "./db";
-import { allow, spend } from "./redis";
+import { allow, refund, spend } from "./redis";
 import type { Step } from "./schemas";
 import { COOKIE, isLecturerCookie, seal, unseal } from "./sign";
 
@@ -36,6 +36,10 @@ export const FACE_ERRORS = {
   continuity: "We lost track of your face. Keep it in the oval the whole time and turn smoothly.",
 };
 
-export const faceUnavailable = () => fail(503, "Face check is busy. Wait a few seconds and try again.");
+// The face service being down isn't the student's fault, so it gives the try back.
+export async function faceUnavailable(t: Issued) {
+  await refund(`t:${t.id}`);
+  return fail(503, "Face check is busy. Wait a few seconds and try again.");
+}
 
 export const isLecturer = async () => isLecturerCookie((await cookies()).get(COOKIE)?.value);

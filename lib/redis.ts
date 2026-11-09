@@ -16,3 +16,6 @@ export async function allow(key: string, max: number, windowS: number) {
 
 // Uses up the rest of `key`'s allowance until its window ends (the key exists once allow() has run).
 export const spend = (key: string, max: number) => redis().incrby(`rl:${key}`, max);
+
+// Gives back one hit that wasn't the caller's fault.
+export const refund = (key: string) => redis().decr(`rl:${key}`).catch(() => undefined);

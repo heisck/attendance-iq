@@ -47,7 +47,7 @@ export async function POST(req: Request, { params }: RouteContext<"/api/s/[id]/r
   try {
     face = await checkFace(t.challenge, body);
   } catch {
-    return faceUnavailable();
+    return faceUnavailable(t);
   }
   if (!face.ok) return fail(422, FACE_ERRORS[face.reason]);
   await logFace({ result: "ok", ...face.detail });

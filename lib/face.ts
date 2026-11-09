@@ -18,16 +18,26 @@ export function pickChallenge(): Step[] {
 export type FaceResult = { ok: true; embedding: Float32Array; detail?: object } | { ok: false; reason: "no_face" | "challenge" | "same_face" | "spoof" | "continuity" };
 
 async function call(body: object) {
-  const res = await fetch(process.env.FACE_URL!, {
-    method: "POST",
-    // A Modal proxy auth token (modal.com -> Settings -> Proxy Auth Tokens).
-    headers: { "Modal-Key": process.env.FACE_TOKEN_ID!, "Modal-Secret": process.env.FACE_TOKEN_SECRET!, "content-type": "application/json" },
-    body: JSON.stringify(body),
-    // A cold container plus a queue during a class-wide rush stays well under this.
-    signal: AbortSignal.timeout(45_000),
+  const json = JSON.stringify(body);
+  // A cold container plus a queue during a class-wide rush stays well under this (routes allow 60 s).
+  const deadline = Date.now() + 45_000;
+  const once = async () => {
+    const res = await fetch(process.env.FACE_URL!, {
+      method: "POST",
+      // A Modal proxy auth token (modal.com -> Settings -> Proxy Auth Tokens).
+      headers: { "Modal-Key": process.env.FACE_TOKEN_ID!, "Modal-Secret": process.env.FACE_TOKEN_SECRET!, "content-type": "application/json" },
+      body: json,
+      signal: AbortSignal.timeout(deadline - Date.now()),
+    });
+    if (!res.ok) throw new Error(`Face service answered ${res.status}`);
+    return res.json();
+  };
+  // A blip (dropped connection, 5xx) resends the same images once instead of making the student film again.
+  // A timeout doesn't: the budget is spent.
+  return once().catch((e) => {
+    if (e?.name === "TimeoutError" || deadline - Date.now() < 5_000) throw e;
+    return once();
   });
-  if (!res.ok) throw new Error(`Face service answered ${res.status}`);
-  return res.json();
 }
 
 export async function checkFace(challenge: Step[], capture: { frames: string[]; track: string[]; marks: number[] }): Promise<FaceResult> {
