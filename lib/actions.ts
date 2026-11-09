@@ -46,14 +46,14 @@ export async function startSession(sessionId: string) {
   const now = Date.now();
   await db.execute({ sql: "UPDATE sessions SET started_at = ?, stopped_at = NULL WHERE id = ? AND closes_at > ?", args: [now, id(sessionId), now] });
   after(warmFace);
-  refresh();
+  // No refresh(): the live page keeps its own state from this return value, and other lecturer pages
+  // are dynamic, so they read fresh on the next visit. A refresh would re-render this page for nothing.
   return getSession(id(sessionId), true);
 }
 
 export async function stopSession(sessionId: string) {
   await lecturer();
   await db.execute({ sql: "UPDATE sessions SET stopped_at = ? WHERE id = ?", args: [Date.now(), id(sessionId)] });
-  refresh();
   return getSession(id(sessionId), true);
 }
 
@@ -68,7 +68,7 @@ export async function setMark(sessionId: string, studentId: string, present: boo
         }
       : { sql: "DELETE FROM attendance WHERE session_id = ? AND student_id = ?", args: [id(sessionId), id(studentId)] },
   );
-  refresh();
+  // No refresh(): the course table already shows the change; re-rendering it reads every mark in the course.
 }
 
 // Clears a face so the student can register again (their roster entry shows in suggestions again).

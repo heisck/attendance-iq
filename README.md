@@ -41,8 +41,8 @@ Checks: `npm test` (QR signing, timing rules, CSV), `npx tsc --noEmit`, `npm run
 
 ## How it holds up with a full class (1000 students at once)
 
-- **QR codes** stream to each screen over Server-Sent Events (`/api/s/[id]/qr`): one long response per screen instead of a request per second. Codes are HMACs, so making and checking them touches no storage.
-- **Scan → ticket** costs one Redis write. **Face check** costs one Redis read, one Turso read, the Modal call and one Turso write. Session rows are cached in memory for 5 s per server instance.
+- **QR codes** are made by each screen itself (`lib/code.ts`), keyed per node, so showing them costs no requests. Checking one is an HMAC on the server, with no storage.
+- **Scan → ticket** stores nothing (the ticket is sealed). **Face check** costs a Redis try counter, one Turso read, the Modal call and one Turso write. Session rows are cached in memory for 5 s per server instance.
 - **Modal** runs 2 checks per 2-CPU container and scales to 40 containers (about 80 checks in flight). A check takes about 1 s on Modal's CPUs (6 frames plus ~33 snapshots). Pressing Start wakes a container ahead of the rush. To go higher, raise `max_containers` in `face/app.py`.
 - **Turso** client allows 200 requests in flight per server instance (`lib/db.ts`; the library default of 20 queued a whole class).
 - **Duplicate check** compares against every face in the course, read fresh from Turso (one row per registered student).
@@ -68,6 +68,6 @@ Failures log numbers only (no images) in the server log, for tuning:
 - `face check failed: challenge {"left":"0.12 of 0.18", ..., "frames":"center:+0.02/0.55 ..."}`: how far each move got, and every frame's yaw/pitch.
 - `face check failed: continuity {"gap":0,"shift":0.12,"scale":1.1,"turn":0.2,"same":0.7}`: the largest jumps seen between snapshots.
 
-Vercel's Hobby plan keeps server logs for about an hour, so every face check (passes too) and every 1:1 match score is also kept in Redis (`facelog`, the last 5000, numbers only). `npm run facelog [hours]` (default a week) counts results (`ok`, `no_face`, `challenge`, `continuity`, `same_face`, `spoof`, `match`, `no_match`) and shows the spread of each score: `real` is the mean anti-spoof score (fails under `REAL`), `same` the lowest frame-to-center similarity (fails under `SAME_FACE`), `similarity` the 1:1 match (fails under `MATCH`).
+Vercel's Hobby plan keeps server logs for about an hour, so every face check (passes too) and every 1:1 match score is also kept in Redis (`facelog`, the last 5000, numbers only). `npm run facelog [hours]` (default a week) counts results, one entry per check: failures (`no_face`, `challenge`, `continuity`, `same_face`, `spoof`), passes at registration (`ok`) and passes at attendance (`match` or `no_match`, with the face scores too) and shows the spread of each score: `real` is the mean anti-spoof score (fails under `REAL`), `same` the lowest frame-to-center similarity (fails under `SAME_FACE`), `similarity` the 1:1 match (fails under `MATCH`).
 
 Knobs at the top of `face/app.py`: `TURN` and `TILT` (how far students must move), `TRACK_*` (continuity limits), `SAME_FACE`, `REAL` (anti-spoof) and `MIN_FACE`. The match threshold is `MATCH` in `lib/face.ts` (OpenCV's published SFace value). Test `face/app.py` against photos without Modal: `python face/app.py <models dir> img1.jpg img2.jpg`.

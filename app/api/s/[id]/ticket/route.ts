@@ -29,5 +29,5 @@ export async function POST(req: Request, { params }: RouteContext<"/api/s/[id]/t
   }
 
   const challenge = pickChallenge();
-  return Response.json({ ticket: await issueTicket({ session: id, node, from, challenge }), challenge });
+  return Response.json({ ticket: issueTicket({ session: id, node, from, challenge }), challenge });
 }

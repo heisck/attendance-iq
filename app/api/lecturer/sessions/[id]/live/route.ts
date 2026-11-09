@@ -11,5 +11,6 @@ export async function GET(req: Request, { params }: RouteContext<"/api/lecturer/
   if (!s) return fail(404, "No such session");
   const seen = new URL(req.url).searchParams.get("done");
   const nodes = s.kind === "attendance" && seen !== String(s.done) ? await liveNodes(id) : undefined;
-  return Response.json({ status: s.status, startedAt: s.startedAt, done: s.done, total: s.total, nodes });
+  // now: the server's clock, which the page's own QR codes must carry.
+  return Response.json({ now: Date.now(), status: s.status, startedAt: s.startedAt, done: s.done, total: s.total, nodes });
 }

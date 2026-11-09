@@ -34,11 +34,11 @@ export const FACE_BODY = 12 * FRAME + 40 * SNAPSHOT + 8_000;
 
 export const ticketSchema = z.object({ code: z.string().max(200).optional(), node: z.string().max(100).optional() });
 
-export const attendSchema = z.object({ ticket: z.string().max(64), indexNo: studentFields.shape.indexNo, ...face, ...honeypot });
+export const attendSchema = z.object({ ticket: z.string().max(400), indexNo: studentFields.shape.indexNo, ...face, ...honeypot });
 
 // rosterId: the picked roster entry. fields: only what the student retyped (all four when not on the roster).
 export const registerSchema = z.object({
-  ticket: z.string().max(64),
+  ticket: z.string().max(400),
   rosterId: z.string().max(40).optional(),
   fields: studentFields.partial(),
   ...face,

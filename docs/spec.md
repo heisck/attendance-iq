@@ -60,9 +60,9 @@ Chain depth is unlimited. The rotating code is what protects it.
 
 - A new code every second. Each code is signed by the server and carries the server's time.
 - **Scanning and submitting are separate.** On scan, the phone sends the code to the server straight away. The server checks that the code was issued ≤3 s ago by its own clock and returns a **scan ticket** (one use, valid ~2 min). The face check then runs at its own pace, and the submit carries the ticket. The phone's clock is never trusted.
-- Nodes fetch codes from the server. They never hold the signing secret (otherwise a student could pass it to an absent friend, who could then make valid codes at home). Codes arrive as a Server-Sent Events stream, one per second, so each screen holds one long response instead of making a request every second.
-- A tab becomes a node by marking someone; the server then gives it a **node token** (signed session + node id). The token lets it stream codes, and keeps every person it marks under the same phone in the lecturer's list. Each of those people still scans a live code first.
-- Making and checking codes is stateless (an HMAC with a server secret), so it costs no Redis calls. Only redeeming a ticket touches Redis.
+- Each screen makes its own codes, once a second, with a **QR key** for its node (an HMAC of session + node under the app secret). No screen ever holds the app secret, and showing codes costs no request. A node's key can only make codes for that node, so a key passed to an absent friend gives them what a copied node token already did (see the threat table): marks that show under that node. Codes carry the server's time: a node takes its clock offset from its mark's timestamp, the lecturer's screen from the live poll.
+- A tab becomes a node by marking someone; the server then gives it a **node token** (signed session + node id). Along with it comes the node's QR key. The token keeps every person it marks under the same phone in the lecturer's list. Each of those people still scans a live code first.
+- Making and checking codes is stateless, so it costs no storage. Scan tickets are sealed (signed JSON), so issuing one stores nothing; redeeming one counts its tries in Redis.
 
 ## Face + liveness
 
@@ -91,7 +91,7 @@ Duplicate check speed: comparing one embedding against a course's embeddings is 
 | Live video call relaying the QR code | **Not blocked.** Lecturer sees marks per node. |
 | Real-time deepfake through a virtual camera | **Not blocked.** The phone-only gate makes it harder; the browser type can be faked. |
 | Twins marking for each other after approval | **Not blocked.** |
-| A node token copied to an absent friend's phone | **Not blocked.** Their marks show under that node, which the lecturer sees flagged once it marks many people. |
+| A node token or QR key copied to an absent friend's phone | **Not blocked.** Their marks show under that node, which the lecturer sees flagged once it marks many people. |
 
 Backstops: the live count vs. people in the room, the marks made by each node, and manual unmark.
 
@@ -102,10 +102,10 @@ Other limits: models can be less accurate in poor lighting and on some skin tone
 Free-tier allowances: Turso 500M rows read and 10M written a month (queries fail with `BLOCKED` past it); Upstash 500K commands a month. Turso bills every row a query *scans*, `count(*)` included.
 
 - **Turso, per mark:** about 3 rows read. **Live view:** 2 rows per poll, plus about two rows per mark in the session whenever the count moved. **Lecturer pages:** one row per session and course, plus the course page's attendance table (one row per mark in that course). **Registration:** one row per registered student for the duplicate check, one per roster student per name search.
-- **Upstash, per mark:** about 6 commands (ticket 2, redeem 2, face log ~1, end 1); per registration about 10. A 200-student class is roughly 1,200 commands. Nothing in the app polls Redis; load tests are what spend it fast.
+- **Upstash, per mark:** about 4 commands (try counter 2, face log ~1, spending the ticket 1); per registration about 8. A 200-student class is roughly 800 commands. Nothing in the app polls Redis; load tests are what spend it fast.
 
-- **Vercel Hobby:** each screen showing a QR code holds one streaming response (reconnecting every ~5 minutes), so 200 nodes × 30 min is about 1,200 requests, not 360k.
-- **Modal Starter:** $30/month free credits. A face check is about 0.2 CPU-seconds. Pressing Start wakes a container; idle containers shut down after 5 minutes.
+- **Vercel Hobby:** showing QR codes costs nothing on the server (each screen makes its own). Per student: one page load, a ticket, a face check. The lecturer's live view adds one short request every 3 s while visible.
+- **Modal Starter:** $30/month free credits. A face check is about 0.2 CPU-seconds. Modal bills containers while they're up, idle included: one spare container is kept while checks run, and idle ones shut down after 2 minutes. Pressing Start wakes one ahead of the rush.
 
 ## Data model
 

@@ -208,7 +208,9 @@ def analyze(m: Models, frames: list[bytes], challenge: list[str], track: list[by
 
 # ponytail: 2 CPUs x 2 inputs per container, up to 40 containers (~80 checks in flight, ~1000 students in well
 # under a minute). Raise max_containers if a bigger class queues.
-@app.cls(cpu=2.0, memory=1024, max_containers=40, buffer_containers=2, scaledown_window=300)
+# Modal bills a container for as long as it is up, idle included, and checks take ~1 s: one spare container
+# (not two) and a 2-minute idle window (not 5) cut most of the idle bill. Start wakes one ahead of the rush.
+@app.cls(cpu=2.0, memory=1024, max_containers=40, buffer_containers=1, scaledown_window=120)
 @modal.concurrent(max_inputs=2)
 class Face:
     @modal.enter()

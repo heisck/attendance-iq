@@ -14,12 +14,5 @@ export async function allow(key: string, max: number, windowS: number) {
   return n <= max;
 }
 
-// HGETALL as an object of strings; null when the key doesn't exist.
-// (Without automatic deserialization the client returns a flat [field, value, ...] list.)
-export async function hash(key: string) {
-  const flat = (await redis().hgetall(key)) as unknown as string[] | null;
-  if (!flat?.length) return null;
-  const out: Record<string, string> = {};
-  for (let i = 0; i < flat.length; i += 2) out[flat[i]] = flat[i + 1];
-  return out;
-}
+// Uses up the rest of `key`'s allowance until its window ends (the key exists once allow() has run).
+export const spend = (key: string, max: number) => redis().incrby(`rl:${key}`, max);

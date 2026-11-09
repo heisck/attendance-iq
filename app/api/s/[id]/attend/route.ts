@@ -2,13 +2,14 @@ import { fail, readBody } from "@/lib/api";
 import { db, getSession } from "@/lib/db";
 import { checkFace, cosine, fromBlob, logFace, MATCH } from "@/lib/face";
 import { attendSchema, FACE_BODY } from "@/lib/schemas";
-import { nodeToken } from "@/lib/sign";
+import { nodeToken, qrKey } from "@/lib/sign";
+import { AUTO_CLOSE_MS } from "@/lib/time";
 import { endTicket, FACE_ERRORS, faceUnavailable, redeemTicket } from "@/lib/ticket";
 
 export const maxDuration = 60;
 
 // Face check for one index number, 1:1 against its registered face. Success marks them present and
-// makes this tab a node (it gets a node token to show codes and mark the next person).
+// makes this tab a node: a node token to mark the next person, and a QR key to show its own codes.
 export async function POST(req: Request, { params }: RouteContext<"/api/s/[id]/attend">) {
   const { id } = await params;
   const body = await readBody(req, attendSchema, FACE_BODY);
@@ -40,7 +41,7 @@ export async function POST(req: Request, { params }: RouteContext<"/api/s/[id]/a
   }
   if (!face.ok) return fail(422, FACE_ERRORS[face.reason]);
   const similarity = cosine(face.embedding, fromBlob(student.embedding as ArrayBuffer));
-  await logFace({ result: similarity < MATCH ? "no_match" : "match", similarity: Math.round(similarity * 1000) / 1000 });
+  await logFace({ result: similarity < MATCH ? "no_match" : "match", similarity: Math.round(similarity * 1000) / 1000, ...face.detail });
   if (similarity < MATCH)
     return fail(422, `Your face didn't match index number ${body.indexNo}. Check the number and try again.`);
 
@@ -50,6 +51,8 @@ export async function POST(req: Request, { params }: RouteContext<"/api/s/[id]/a
     args: [id, student.id, markedAt, t.node, t.from || null],
   });
   if (!res.rowsAffected) return fail(409, already);
-  await endTicket(body.ticket);
-  return Response.json({ ok: true, markedAt, node: nodeToken(id, t.node) });
+  await endTicket(t);
+  // markedAt doubles as the server's clock for this phone's codes; `until` is when the session auto-closes.
+  const until = Math.min((s.startedAt ?? markedAt) + AUTO_CLOSE_MS, s.closesAt);
+  return Response.json({ ok: true, markedAt, node: nodeToken(id, t.node), qr: { key: qrKey(id, t.node), node: t.node, until } });
 }

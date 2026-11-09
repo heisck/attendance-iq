@@ -1,41 +1,32 @@
 import { cookies } from "next/headers";
 import { fail } from "./api";
 import { newId } from "./db";
-import { hash, redis } from "./redis";
+import { allow, spend } from "./redis";
 import type { Step } from "./schemas";
-import { COOKIE, isLecturerCookie } from "./sign";
+import { COOKIE, isLecturerCookie, seal, unseal } from "./sign";
 
 // A scan ticket: issued when a fresh QR code (or a node token) reaches the server, then carried by the
-// face-check submit. One use, TICKET_TTL_S long, MAX_TRIES face checks. Registration tickets need no code.
+// face-check submit. Sealed (lib/sign.ts), so issuing one stores nothing; redeeming counts tries in Redis.
+// One use, TICKET_TTL_S long, MAX_TRIES face checks. Registration tickets need no code.
 export const TICKET_TTL_S = 120;
 const MAX_TRIES = 3;
 
 type Ticket = { session: string; node: string; from: string; challenge: Step[] };
+type Issued = Ticket & { id: string; exp: number };
 
-export async function issueTicket(t: Ticket) {
-  const ticket = newId(24);
-  await redis()
-    .pipeline()
-    .hset(`t:${ticket}`, { ...t, challenge: JSON.stringify(t.challenge) })
-    .expire(`t:${ticket}`, TICKET_TTL_S)
-    .exec();
-  return ticket;
-}
+export const issueTicket = (t: Ticket) => seal("ticket", { ...t, id: newId(16), exp: Date.now() + TICKET_TTL_S * 1000 });
 
 // The ticket, or a 401 telling the phone to scan again.
-export async function redeemTicket(ticket: string, sessionId: string): Promise<Ticket | Response> {
-  const key = `t:${ticket}`;
-  const t = await hash(key);
+export async function redeemTicket(ticket: string, sessionId: string): Promise<Issued | Response> {
+  const t = unseal<Issued>("ticket", ticket);
   const rescan = (error: string) => Response.json({ error, rescan: true }, { status: 401 });
-  if (!t || t.session !== sessionId) return rescan("Your scan expired. Scan the code again.");
-  if ((await redis().hincrby(key, "tries", 1)) > MAX_TRIES) {
-    await redis().del(key);
-    return rescan("Too many tries. Scan the code again.");
-  }
-  return { session: t.session, node: t.node, from: t.from, challenge: JSON.parse(t.challenge) };
+  if (!t || t.session !== sessionId || t.exp < Date.now()) return rescan("Your scan expired. Scan the code again.");
+  if (!(await allow(`t:${t.id}`, MAX_TRIES, TICKET_TTL_S))) return rescan("Too many tries. Scan the code again.");
+  return t;
 }
 
-export const endTicket = (ticket: string) => redis().del(`t:${ticket}`);
+// After a success: spends the tries left, so one scan can't mark a second person.
+export const endTicket = (t: Issued) => spend(`t:${t.id}`, MAX_TRIES);
 
 export const FACE_ERRORS = {
   no_face: "We lost your face partway. Keep your face filling the oval, in good light, and try again.",

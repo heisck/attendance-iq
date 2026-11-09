@@ -40,30 +40,44 @@ export function isLecturerCookie(value: string | undefined, now = Date.now()) {
   return Number(exp) > now && !!sig && same(sig, cookieMac(exp));
 }
 
-// QR code: "<session>.<node>.<server seconds>.<mac>". Stateless: making or checking one needs no storage.
-// Accepted if the server issued it at most CODE_MAX_AGE_S ago by its own clock.
+// QR codes (format in lib/code.ts) are made by each screen with its node's QR key, and checked here.
+// Accepted if made at most CODE_MAX_AGE_S ago by the server's clock. Stateless: no storage either way.
 export const CODE_MAX_AGE_S = 3;
-
-export function makeCode(sessionId: string, node: string, now = Date.now()) {
-  const body = `${sessionId}.${node}.${Math.floor(now / 1000)}`;
-  return `${body}.${mac(`code.${body}`)}`;
-}
+export const qrKey = (sessionId: string, node: string) => mac(`qr.${sessionId}.${node}`, 43);
 
 export function readCode(code: string, sessionId: string, now = Date.now()) {
   const parts = code.split(".");
   if (parts.length !== 4 || parts[0] !== sessionId) return null;
   const [, node, t, sig] = parts;
-  // t is floored to the second, so a code issued 3.9 s ago reads as 3 s + a fraction.
+  // t is floored to the second, so a code made 3.9 s ago reads as 3 s + a fraction.
   const age = now / 1000 - Number(t);
-  if (!(age > -1 && age < CODE_MAX_AGE_S + 1)) return null;
-  return same(sig, mac(`code.${sessionId}.${node}.${t}`)) ? node : null;
+  if (!node || !(age > -1 && age < CODE_MAX_AGE_S + 1)) return null;
+  const want = createHmac("sha256", qrKey(sessionId, node)).update(`code.${sessionId}.${node}.${t}`).digest("base64url").slice(0, 22);
+  return same(sig, want) ? node : null;
 }
 
-// Node token: proof that this tab marked someone in this session, so it may show codes and mark
-// the next person without scanning again.
+// Node token: proof that this tab marked someone in this session, so every next person it marks
+// (each still scanning a live code first) counts under the same phone.
 export const nodeToken = (sessionId: string, node: string) => `${node}.${mac(`node.${sessionId}.${node}`)}`;
 
 export function readNodeToken(token: string, sessionId: string) {
   const [node, sig] = token.split(".");
   return node && sig && same(sig, mac(`node.${sessionId}.${node}`)) ? node : null;
+}
+
+// A value its holder can read but not change: "<base64url JSON>.<mac>". Used for scan tickets, so they
+// need no storage until redeemed.
+export function seal(purpose: string, data: object) {
+  const body = Buffer.from(JSON.stringify(data)).toString("base64url");
+  return `${body}.${mac(`${purpose}.${body}`)}`;
+}
+
+export function unseal<T>(purpose: string, value: string): T | null {
+  const [body, sig] = value.split(".");
+  if (!body || !sig || !same(sig, mac(`${purpose}.${body}`))) return null;
+  try {
+    return JSON.parse(Buffer.from(body, "base64url").toString());
+  } catch {
+    return null;
+  }
 }

@@ -20,12 +20,14 @@ function fmt(ms: number) {
 
 type Live = Pick<Session, "status" | "startedAt" | "done" | "total"> & { nodes: Node[] };
 
-export function LiveSession({ session, nodes }: { session: Session; nodes: Node[] }) {
+export function LiveSession({ session, nodes, qrKey }: { session: Session; nodes: Node[]; qrKey: string }) {
   const [live, setLive] = useState<Live>({ ...session, nodes });
   const [now, setNow] = useState(() => Date.now());
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // The server's clock minus this device's, measured by each poll; the QR codes carry server time.
+  const [offset, setOffset] = useState(0);
   const stage = useRef<HTMLElement>(null);
   const running = live.status === "live";
   const reg = session.kind === "registration";
@@ -36,18 +38,23 @@ export function LiveSession({ session, nodes }: { session: Session; nodes: Node[
   // Sends the count it already has, so the server can skip re-reading the phone list when nothing moved.
   const done = useRef(session.done);
   const poll = useCallback(async () => {
+    const sent = Date.now();
     const r = await fetch(`/api/lecturer/sessions/${session.id}/live?done=${done.current}`).catch(() => null);
     if (!r?.ok) return;
-    const next: Omit<Live, "nodes"> & { nodes?: Node[] } = await r.json();
+    const { now: serverNow, ...next }: Omit<Live, "nodes"> & { now: number; nodes?: Node[] } = await r.json();
+    // The server read its clock about halfway through the round trip.
+    setOffset(serverNow - (sent + Date.now()) / 2);
     done.current = next.done;
     setLive((l) => ({ ...next, nodes: next.nodes ?? l.nodes }));
   }, [session.id]);
 
   // While live: the clock ticks every second, counts and phones refresh every few seconds. A hidden tab
-  // skips the refresh (nobody is looking) and catches up the moment it's shown again.
+  // skips the refresh (nobody is looking) and catches up the moment it's shown again. The first refresh
+  // runs at once, to set the QR clock.
   useEffect(() => {
     if (!running) return;
     const refresh = () => !document.hidden && poll();
+    refresh();
     const clock = setInterval(() => setNow(Date.now()), 1000);
     const counts = setInterval(refresh, POLL_MS);
     document.addEventListener("visibilitychange", refresh);
@@ -120,7 +127,7 @@ export function LiveSession({ session, nodes }: { session: Session; nodes: Node[
                 {reg ? (
                   <RotatingQr value={`${typeof window === "undefined" ? "" : window.location.origin}${link}`} />
                 ) : (
-                  <RotatingQr src={`/api/s/${session.id}/qr`} onClosed={poll} />
+                  <RotatingQr source={{ key: qrKey, sessionId: session.id, node: "lecturer", offset }} />
                 )}
               </div>
             </>

@@ -1,7 +1,7 @@
 import type { InStatement } from "@libsql/client";
 import { fail, ip, readBody } from "@/lib/api";
 import { db, getSession, newId } from "@/lib/db";
-import { checkFace, closestMatch, toBlob } from "@/lib/face";
+import { checkFace, closestMatch, logFace, toBlob } from "@/lib/face";
 import { allow } from "@/lib/redis";
 import { FIELDS, registerSchema, FACE_BODY, studentFields, type Field } from "@/lib/schemas";
 import { endTicket, FACE_ERRORS, faceUnavailable, redeemTicket } from "@/lib/ticket";
@@ -50,6 +50,7 @@ export async function POST(req: Request, { params }: RouteContext<"/api/s/[id]/r
     return faceUnavailable();
   }
   if (!face.ok) return fail(422, FACE_ERRORS[face.reason]);
+  await logFace({ result: "ok", ...face.detail });
 
   // ponytail: two lookalikes registering in the same instant can miss each other; the lecturer's roster is the backstop.
   const duplicate = await closestMatch(s.courseId, face.embedding);
@@ -86,6 +87,6 @@ export async function POST(req: Request, { params }: RouteContext<"/api/s/[id]/r
     if (String(e).includes("UNIQUE")) return fail(409, `Index number ${details.indexNo} is already registered. Ask your lecturer.`);
     throw e;
   }
-  await endTicket(body.ticket);
+  await endTicket(t);
   return Response.json({ ok: true, status: status === "active" ? "active" : "pending" });
 }

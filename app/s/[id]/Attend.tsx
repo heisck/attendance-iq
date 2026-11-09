@@ -5,7 +5,7 @@ import { FaceCheck, type Capture } from "@/components/FaceCheck";
 import { PhoneHead, PhoneState } from "@/components/Phone";
 import { PillField } from "@/components/PillField";
 import { QrScanner } from "@/components/QrScanner";
-import { RotatingQr } from "@/components/RotatingQr";
+import { RotatingQr, type QrSource } from "@/components/RotatingQr";
 import { post } from "@/lib/post";
 import type { Step as Move } from "@/lib/schemas";
 
@@ -25,6 +25,7 @@ export function Attend({ title, sessionId }: { title: string; sessionId: string 
   // Set after the first mark: lets this tab show codes, and keeps it one phone in the lecturer's list.
   // Every person marked here still scans a live code first (that's what shows they're in the room).
   const [node, setNode] = useState("");
+  const [qr, setQr] = useState<QrSource | null>(null);
   const company = useRef("");
 
   async function getTicket(code: string) {
@@ -46,6 +47,8 @@ export function Attend({ title, sessionId }: { title: string; sessionId: string 
   async function faceDone(capture: Capture) {
     const r = await post(`/api/s/${sessionId}/attend`, { ticket: ticket!.ticket, indexNo, ...capture, company: company.current });
     if (r.ok) {
+      // The phone's clock may be off; codes must carry the server's time, so keep the difference.
+      setQr({ ...r.data.qr, sessionId, offset: r.data.markedAt - Date.now() });
       setNode(r.data.node ?? node);
       setMarkedAt(r.data.markedAt ?? Date.now());
       setMarked((m) => m + 1);
@@ -177,7 +180,7 @@ export function Attend({ title, sessionId }: { title: string; sessionId: string 
               <span className="live-finder" data-turning aria-hidden="true" />
               <p className="live-meta ls-meta">New code every second</p>
               <div className="ls-qr">
-                <RotatingQr src={`/api/s/${sessionId}/qr?node=${encodeURIComponent(node)}`} onClosed={() => setStep("closed")} />
+                {qr && <RotatingQr source={qr} onClosed={() => setStep("closed")} />}
               </div>
             </section>
             <p className="muted small">Keep this tab open; refreshing or closing it stops the code.</p>
