@@ -34,5 +34,5 @@ export function pickChallenge(): Challenge {
     colors.push(0);
   } while (new Set(colors.filter(Boolean)).size < 3);
   const between = (lo: number, hi: number) => Math.round((lo + (random(1001) / 1000) * (hi - lo)) * 1000) / 1000;
-  return { colors, oval: { x: between(0.4, 0.6), y: between(0.42, 0.52), w: between(0.62, 0.74) } };
+  return { colors, oval: { x: between(0.4, 0.6), y: between(0.42, 0.52), w: between(0.66, 0.76) } };
 }

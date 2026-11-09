@@ -76,8 +76,8 @@ All on the server (Modal). The phone only captures frames.
 4. The server checks that:
    - the face never leaves the snapshots and never jumps between them (photos swapped in front of the camera do both), and each frame is the picture its snapshot was taken from,
    - the face grew and ended up in the challenge's oval (a pre-recorded clip doesn't line up),
-   - coming closer changed the face's proportions the way a real head does (the nose is nearer the lens than the cheeks); a photo or a screen only gets bigger,
-   - the face's colour followed the screen's sequence, measured against the background so the camera's auto white balance cancels out (a replayed video or a virtual camera never saw those colours),
+   - coming closer changed the face's proportions the way a real head does (the nose is nearer the lens than the cheeks); a photo or a screen only gets bigger. **Shadow mode** (`DEPTH = None`): scored and logged, not enforced, until real checks separate faces from photos (first real checks: −0.01 to +0.10 from YuNet's 5 landmarks, too noisy),
+   - the face's colour followed the screen's sequence, measured against the background so the camera's auto white balance cancels out (a replayed video or a virtual camera never saw those colours). **Shadow mode** (`FLASH = None`) until phone checks give a bar (a laptop screen ~60 cm away scored 0–0.46),
    - every frame shows the same face, and an anti-spoof model doesn't flag a print or a screen,
    - the face matches a registered embedding (see attendance above).
 5. YuNet also runs on the phone (onnxruntime-web, the runtime from jsDelivr, ~3.8 MB compressed, cached after the first time) for hints only: "move closer", "centre your face", "too dark". It holds the Start button until the face sits in the oval. Nothing it says is trusted; until it loads, or where it can't run, the check works without hints.
@@ -90,8 +90,8 @@ Matching speed: comparing one embedding against a course's embeddings is a plain
 | Attack | Status |
 |---|---|
 | Photo of the QR sent to someone at home | Blocked (1 s rotation, 3 s server window) |
-| A printed photo or a phone screen held to the camera | Blocked (depth + colour flash + anti-spoof) |
-| A pre-recorded video of the student, held up or through a virtual camera | Blocked (colour flash: the video never saw the colours; the oval's spot is random) |
+| A printed photo or a phone screen held to the camera | Anti-spoof model only, while depth and colour flash are in shadow mode. Weaker than the old turn challenge until one of them is enforced. |
+| A pre-recorded video of the student, held up or through a virtual camera | **Not blocked yet.** The colour flash is built for this (the video never saw the colours; the oval's spot is random) but is in shadow mode. |
 | Faking a "matched" result or replaying an embedding | Blocked (server-side verification) |
 | One person registering as two people | Blocked (duplicate check + lecturer approval) |
 | Live video call relaying the QR code | **Not blocked.** Lecturer sees marks per node. |

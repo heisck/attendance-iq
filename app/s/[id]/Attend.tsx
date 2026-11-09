@@ -113,6 +113,11 @@ export function Attend({ title, sessionId }: { title: string; sessionId: string 
           <h1>{marked > 0 ? "Next person: scan the class QR code" : "Scan the class QR code"}</h1>
           <QrScanner onCode={scanned} paused={busy} />
           <p className="muted">{busy ? "Checking the code…" : "Point at the code on your lecturer's screen or a classmate's phone."}</p>
+          {process.env.NODE_ENV === "development" && (
+            <button className="btn btn-outline btn-block" onClick={() => getTicket("dev-skip")} disabled={busy}>
+              Skip the QR code (dev only)
+            </button>
+          )}
           {error && (
             <p className="notice notice-danger" role="alert">
               {error}

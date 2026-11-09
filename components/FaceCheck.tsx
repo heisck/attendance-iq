@@ -12,7 +12,7 @@ import { Camera } from "./Camera";
 // track: a small snapshot every TRACK_MS throughout, times: each one's ms from the flash start;
 // frames: sharp pictures, each taken from the same picture as a snapshot (marks).
 // Pictures are raw camera pixels (the preview is mirrored, they aren't). YuNet on the phone only gives hints.
-const FAR_OVAL = { x: 0.5, y: 0.46, w: 0.42 };
+const FAR_OVAL = { x: 0.5, y: 0.46, w: 0.38 };
 const FAR_MS = 1000;
 const TRACK_MS = 100;
 const FAR_AT = [-600, -200]; // ms from the flash start
@@ -53,13 +53,18 @@ function jpeg(c: HTMLCanvasElement, width: number, quality: number) {
 const rgb = (i: number) => `rgb(${COLORS[i].join(" ")})`;
 
 // What to tell the student about where their face is against the oval they should fill, or "" if it fits.
-function advise(seen: Awaited<ReturnType<typeof look>>, oval: Oval) {
+// fit is YuNet's box width over the oval's: ~0.7 when the face looks like it fills it (measured on real
+// checks; the box is narrower than a face looks). Far: no bigger than the small oval, so there's room to come
+// closer. Close: about filling the big one, so the face grows by the face service's CLOSER (1.35x) even in
+// the worst case (0.65 x 0.66 / (0.8 x 0.38) = 1.41); a face filling both grows ~1.9x.
+const FIT = { far: [0.5, 0.8], close: [0.65, 1.3] } as const;
+function advise(seen: Awaited<ReturnType<typeof look>>, oval: Oval, [min, max]: readonly [number, number]) {
   if (!seen) return "";
   if (!seen.face) return seen.light < DARK ? "Too dark. Face a light or a window." : "Fit your face in the oval";
   const { x, y, w, h } = seen.face;
-  const fit = w / oval.w; // YuNet's box is about 0.8 of an oval the face fills
-  if (fit < 0.6) return "Move closer";
-  if (fit > 1.15) return "Move back a little";
+  const fit = w / oval.w;
+  if (fit < min) return "Move closer";
+  if (fit > max) return "Move back a little";
   // The preview is mirrored: the face's x flips.
   if (Math.abs(1 - (x + w / 2) - oval.x) > 0.1 || Math.abs(y + h / 2 - oval.y) > 0.1) return "Centre your face in the oval";
   return seen.light < DARK ? "Too dark. Face a light or a window." : "";
@@ -93,7 +98,7 @@ export function FaceCheck({ challenge, onFrames, error }: { challenge: Challenge
         const seen = video.current ? await look(video.current) : null;
         if (stop) break;
         if (seen) setHinting(true);
-        setHint(advise(seen, s === "flash" ? challenge.oval : FAR_OVAL));
+        setHint(s === "flash" ? advise(seen, challenge.oval, FIT.close) : advise(seen, FAR_OVAL, FIT.far));
         await new Promise((r) => setTimeout(r, s === "align" ? 250 : 300));
       }
     })();
@@ -159,7 +164,7 @@ export function FaceCheck({ challenge, onFrames, error }: { challenge: Challenge
     stage === "checking"
       ? "Checking…"
       : stage === "flash"
-        ? hint && hint !== "Move back a little" ? hint : "Bring the phone closer to fill the oval"
+        ? hint || (hinting ? "Hold still" : "Bring the phone closer to fill the oval")
         : stage === "far"
           ? "Hold still…"
           : hint || "Fit your face in the oval";
@@ -170,14 +175,11 @@ export function FaceCheck({ challenge, onFrames, error }: { challenge: Challenge
 
   return (
     <>
-      <div className="phone-body" ref={body}>
+      {/* --ox, --oy, --ow: the oval, for its outline and for clipping the video to it while lit. */}
+      <div className="phone-body" ref={body} style={{ "--ox": oval.x, "--oy": oval.y, "--ow": oval.w } as React.CSSProperties}>
         {lit && <div className="face-light" aria-hidden="true" />}
         <Camera facing="user" video={video} lit={lit}>
-          <div
-            className="frame-face"
-            data-state={stage === "checking" ? "ok" : undefined}
-            style={{ "--ox": oval.x, "--oy": oval.y, "--ow": oval.w } as React.CSSProperties}
-          />
+          <div className="frame-face" data-state={stage === "checking" ? "ok" : undefined} />
           <p className="camera-caption" aria-live="polite">
             {caption}
           </p>

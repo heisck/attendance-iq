@@ -2623,6 +2623,15 @@ body:has(.phone) {
   left: 50%;
   translate: -50% -50%;
   width: min(100vw - 32px, 60svh);
+  /* The light's colour, not ink: the clipped edge otherwise shows as a dark outline around the box. */
+  background: var(--flash, #fff);
+  transition: background-color 120ms linear;
+}
+/* While lit, the video exists only inside the oval: the mask alone left a hairline of video at the box's
+   edge (the video and the mask are separate layers). The video is mirrored, so the oval's x flips. */
+.camera[data-lit] video {
+  clip-path: ellipse(calc(var(--ow) * 50%) calc(var(--ow) * 51.5%) at calc((1 - var(--ox)) * 100%) calc(var(--oy) * 100%));
+  transition: clip-path 400ms ease;
 }
 .camera[data-lit] .frame-face {
   border-color: var(--si-ink);

@@ -41,7 +41,7 @@ MATCH = 0.363  # lib/face.ts
 # lib/schemas.ts and components/FaceCheck.tsx
 COLORS = [(255, 255, 255), (255, 40, 40), (40, 255, 40), (40, 80, 255), (255, 255, 40), (255, 40, 255), (40, 255, 255)]
 FLASH_MS, SEQUENCE = 400, 8
-FAR_OVAL = {"x": 0.5, "y": 0.46, "w": 0.42}
+FAR_OVAL = {"x": 0.5, "y": 0.46, "w": 0.38}
 FAR_MS, TRACK_MS, FAR_AT = 1000, 100, (-600, -200)
 W, H, QUALITY, TRACK_W, TRACK_QUALITY = 300, 400, 75, 160, 60
 SCREEN_W, SCREEN_H = 1280, 800  # the window; the preview sits in the middle, the rest is the light
@@ -59,7 +59,7 @@ def challenge():
         if len({c for c in colors if c}) >= 3:
             break
     between = lambda lo, hi: round(lo + secrets.randbelow(1001) / 1000 * (hi - lo), 3)
-    return colors, {"x": between(0.4, 0.6), "y": between(0.42, 0.52), "w": between(0.62, 0.74)}
+    return colors, {"x": between(0.4, 0.6), "y": between(0.42, 0.52), "w": between(0.66, 0.76)}
 
 
 def noise(img, sigma):

@@ -19,7 +19,7 @@ Then, all on the server:
               can't, it never saw those colours); measured against the background, which the screen
               barely lights, so the camera's auto white balance cancels out
   spoof       MiniFASNet on the far frames
-  same face   every sharp frame is the same person; their mean is the embedding
+  same face   every sharp frame is the same person as the close frames, whose mean is the embedding
 
 Deploy:  modal deploy face/app.py
 Bench:   uv run face/bench.py (your webcam, judged by analyze() below)
@@ -42,13 +42,18 @@ W, H = 300, 400  # sharp frame size (FaceCheck.tsx); the oval is in these coordi
 CLOSER = 1.35  # min growth of the face's width, far frames to close frames
 OVAL_SHIFT = 0.12  # max distance of the close face's centre from the oval's centre, as a share of the frame
 OVAL_FIT = (0.55, 1.3)  # close face width over oval width
-DEPTH = 0.03  # min perspective change coming closer (see depth()); a flat picture shows about 0
+# Min perspective change coming closer (see depth()); a flat picture shows about 0. None = shadow mode, like
+# FLASH: real checks scored +0.10, +0.04 and -0.01 from YuNet's 5 landmarks, too noisy to enforce yet.
+DEPTH = None
 FLASH_MS = 400  # each colour's time on screen (FaceCheck.tsx)
-FLASH = 0.5  # min correlation between the face's colour and the screen's
+# Min correlation between the face's colour and the screen's. None = shadow mode: scored and logged on every
+# check but not enforced. The first bench runs (a laptop screen ~60 cm away, room lights on) saw no colour on
+# the face at all; set a bar once phone checks in the real app show live faces scoring clearly above replays.
+FLASH = None
 LAGS = range(0, 401, 50)  # ms the camera may run behind the screen
 SAME_FACE = 0.20  # min cosine between any frame and the mean embedding (close-up distortion scores lower)
 REAL = 0.50  # min mean anti-spoof "real" probability over the far frames
-MIN_FACE = 80  # px in a sharp frame; smaller faces are too far away to judge
+MIN_FACE = 64  # px in a sharp frame; smaller faces are too far away to judge (a far face filling the small oval is ~80)
 # Continuity: one face in every snapshot (every 100 ms), never leaving and never jumping.
 TRACK_GAP = 2  # snapshots in a row allowed without a face (a blur); a hand swapping photos hides it longer
 TRACK_SHIFT = 0.3  # max move of the face centre between snapshots, in face widths
@@ -212,10 +217,10 @@ def flash(pts, thumbs, times, colors) -> tuple[float, int]:
     return best
 
 
-def depth(far, close) -> float:
-    """Mean relative growth of the two depth ratios from far to close (0 for a flat picture)."""
-    grow = lambda k: np.mean([s[k] for s in close]) / np.mean([s[k] for s in far]) - 1
-    return float((grow("spread") + grow("nose")) / 2)
+def depth(far, close) -> tuple[float, float]:
+    """Relative growth of the two depth ratios from far to close, (spread, nose); 0 for a flat picture."""
+    grow = lambda k: float(np.mean([s[k] for s in close]) / np.mean([s[k] for s in far]) - 1)
+    return grow("spread"), grow("nose")
 
 
 def analyze(m: Models, frames: list[bytes], track: list[bytes], marks: list[int], times: list[int], colors: list[list[int]], oval: dict) -> dict:
@@ -240,14 +245,17 @@ def analyze(m: Models, frames: list[bytes], track: list[bytes], marks: list[int]
     ox, oy, ow = (1 - oval["x"]) * W, oval["y"] * H, oval["w"] * W
     cx, cy, cw = (np.mean([s[k] for s in close]) for k in ("x", "y", "w"))
     r, lag = flash(pts, thumbs, times, colors)
-    emb = np.mean([s["emb"] for s in seen], axis=0)
+    # The embedding from the close frames: a big face, lit white. Far ones only have to be the same person.
+    emb = np.mean([s["emb"] for s in close], axis=0)
     emb = emb / np.linalg.norm(emb)
     # The scores go back on every outcome, so passes show their margins too.
     scores = {
         "closer": round(float(cw / np.mean([s["w"] for s in far])), 2),
         "oval": round(float(np.hypot((cx - ox) / W, (cy - oy) / H)), 3),
         "fit": round(float(cw / ow), 2),
-        "depth": round(depth(far, close), 3),
+        "depth": round(sum(d := depth(far, close)) / 2, 3),
+        "spread": round(d[0], 3),
+        "nose": round(d[1], 3),
         "flash": round(r, 3),
         "lag": lag,
         "same": round(min(float(s["emb"] @ emb) for s in seen), 3),
@@ -257,9 +265,9 @@ def analyze(m: Models, frames: list[bytes], track: list[bytes], marks: list[int]
         return {"ok": False, "reason": "approach", "detail": scores}
     if scores["same"] < SAME_FACE:
         return {"ok": False, "reason": "same_face", "detail": scores}
-    if scores["flash"] < FLASH:
+    if FLASH is not None and scores["flash"] < FLASH:
         return {"ok": False, "reason": "flash", "detail": scores}
-    if scores["depth"] < DEPTH or scores["real"] < REAL:
+    if (DEPTH is not None and scores["depth"] < DEPTH) or scores["real"] < REAL:
         return {"ok": False, "reason": "spoof", "detail": scores}
 
     return {"ok": True, "embedding": base64.b64encode(emb.astype("<f4").tobytes()).decode(), "detail": scores}
@@ -340,8 +348,8 @@ if __name__ == "__main__":
     replay, _ = flash(pts, snapshots(False), times, colors)
     print(f"flash: live {live:.2f} at {lag} ms, replay {replay:.2f}")
     assert live > 0.9 and 100 <= lag <= 200, (live, lag)
-    assert replay < FLASH, replay
+    assert replay < 0.5, replay
     far = [{"spread": 0.40, "nose": 0.60}] * 2
-    assert abs(depth(far, [{"spread": 0.40 * 1.08, "nose": 0.60 * 1.05}] * 2) - 0.065) < 1e-6
-    assert abs(depth(far, far)) < 1e-9
+    assert np.allclose(depth(far, [{"spread": 0.40 * 1.08, "nose": 0.60 * 1.05}] * 2), (0.08, 0.05))
+    assert np.allclose(depth(far, far), (0, 0))
     print("ok")

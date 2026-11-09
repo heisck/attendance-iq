@@ -22,8 +22,11 @@ export async function POST(req: Request, { params }: RouteContext<"/api/s/[id]/t
     // Anyone with the link can ask, so cap it (sized for a class sharing one campus IP).
     if (!(await allow(`reg-ticket:${ip(req)}`, 600, 600))) return fail(429, "Too many attempts from this network. Try again in a few minutes.");
   } else {
-    from = (body.code && readCode(body.code, id)) || "";
-    if (!from) return fail(400, "That code expired. Hold steady and scan again.");
+    // `next dev` only: "dev-skip" stands in for a scanned code, to test the face check without a second
+    // screen. NODE_ENV is "production" in every build Vercel serves, so it can't be used there.
+    const skip = process.env.NODE_ENV === "development" && body.code === "dev-skip";
+    from = skip ? "" : (body.code && readCode(body.code, id)) || "";
+    if (!from && !skip) return fail(400, "That code expired. Hold steady and scan again.");
     node = body.node ? (readNodeToken(body.node, id) ?? "") : newId(10).toUpperCase();
     if (!node) return fail(403, "This phone can't mark people for this session. Reload the page and scan again.");
   }
