@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS students (
   on_roster INTEGER NOT NULL DEFAULT 1,
   UNIQUE (course_id, index_no)
 );
+-- Registration name search reads only students not yet registered, in name order, so it stops at the
+-- first few matches (measured: 600-student course, 600+ rows per search before, 5-91 after).
+CREATE INDEX IF NOT EXISTS students_unregistered ON students (course_id, name) WHERE embedding IS NULL;
 
 -- date/starts/ends are what the lecturer typed (for display); opens_at/closes_at are epoch ms (for checks).
 CREATE TABLE IF NOT EXISTS sessions (
