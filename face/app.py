@@ -56,7 +56,8 @@ REAL = 0.50  # min mean anti-spoof "real" probability over the far frames
 MIN_FACE = 64  # px in a sharp frame; smaller faces are too far away to judge (a far face filling the small oval is ~80)
 # Continuity: one face in every snapshot (every 100 ms), never leaving and never jumping.
 TRACK_GAP = 2  # snapshots in a row allowed without a face (a blur); a hand swapping photos hides it longer
-TRACK_SHIFT = 0.3  # max move of the face centre between snapshots, in face widths
+TRACK_SHIFT = 0.5  # max move of the face centre between snapshots, in face widths (a quick real approach hit
+# 0.33 on a phone; a photo swap jumps a face width or more, or loses the face)
 TRACK_SCALE = 1.5  # max change in face size between snapshots (coming closer is gradual)
 TRACK_TURN = 0.6  # max yaw change between snapshots (eye distances)
 TRACK_SAME = 14.0  # max mean grey-level difference between a frame and the snapshot taken with it (0-255)
