@@ -10,7 +10,7 @@ Status: **Live data.** Turso, Upstash and the Modal face service are wired in; s
 |---|---|
 | Web app (lecturer + student pages, API) | Next.js on Vercel |
 | Database | Turso (libSQL) |
-| Cache, rate limits, live session state | Upstash Redis |
+| Scan tickets, rate limits, face-check log | Upstash Redis |
 | Face liveness, face embedding | Modal (Python, CPU). Only the heavy compute lives here. |
 
 Modal is stateless: frames and the challenge in, `{ ok, reason?, embedding? }` out (`reason` is `no_face`, `challenge`, `same_face` or `spoof`). Vercel does the comparison against stored embeddings and writes to Turso. Models: YuNet (face + landmarks), SFace (128-d embedding), MiniFASNetV2 (anti-spoof), all on OpenCV's DNN module on CPU.
@@ -78,7 +78,7 @@ All on the server (Modal). The phone only captures frames.
    - the face matches the registered embedding (1:1).
 4. Frames are processed in memory and dropped. **Only embeddings are stored. No photos.** (The duplicate-evidence photo stays on the lecturer's device.) Failed checks log numbers only, for tuning.
 
-Duplicate check speed: comparing one embedding against a course's embeddings is a plain loop. 1000 students × 128 floats takes about 1 ms. Each course's embeddings are cached in Upstash. Turso's vector search is the upgrade path if a single deployment ever passes ~50k students.
+Duplicate check speed: comparing one embedding against a course's embeddings is a plain loop. 1000 students × 128 floats takes about 1 ms. Embeddings are read fresh from Turso for each registration (a shared cache would cost as much to keep in sync, and a stale one would miss someone registering twice). Turso's vector search is the upgrade path if a single deployment ever passes ~50k students.
 
 ## Known limits (accepted for v1)
 
@@ -99,6 +99,11 @@ Other limits: models can be less accurate in poor lighting and on some skin tone
 
 ## Known costs
 
+Free-tier allowances: Turso 500M rows read and 10M written a month (queries fail with `BLOCKED` past it); Upstash 500K commands a month. Turso bills every row a query *scans*, `count(*)` included.
+
+- **Turso, per mark:** about 3 rows read. **Live view:** 2 rows per poll, plus about two rows per mark in the session whenever the count moved. **Lecturer pages:** one row per session and course, plus the course page's attendance table (one row per mark in that course). **Registration:** one row per registered student for the duplicate check, one per roster student per name search.
+- **Upstash, per mark:** about 6 commands (ticket 2, redeem 2, face log ~1, end 1); per registration about 10. A 200-student class is roughly 1,200 commands. Nothing in the app polls Redis; load tests are what spend it fast.
+
 - **Vercel Hobby:** each screen showing a QR code holds one streaming response (reconnecting every ~5 minutes), so 200 nodes × 30 min is about 1,200 requests, not 360k.
 - **Modal Starter:** $30/month free credits. A face check is about 0.2 CPU-seconds. Pressing Start wakes a container; idle containers shut down after 5 minutes.
 
@@ -106,13 +111,13 @@ Other limits: models can be less accurate in poor lighting and on some skin tone
 
 See [`db/schema.sql`](../db/schema.sql).
 
-- `courses(id, code, name)`
+- `courses(id, code, name, students, registered)`. `students` and `registered` are counters kept by triggers.
 - `students(id, course_id, name, email, student_no, index_no, embedding, status, on_roster)`. Roster and registrations share one table: an imported roster row has no embedding until the student registers. `status` is `active | pending_duplicate | pending_edit`; `on_roster = 0` for students who weren't listed and typed their own details. Unique on `(course_id, index_no)`.
-- `sessions(id, course_id, week, kind, date, starts, ends, opens_at, closes_at, auto_approve_edits, started_at, stopped_at)`. Status is computed: attendance is live from Start until Stop, 30 minutes or `closes_at`; registration is live from `opens_at` (or Start) until Stop or `closes_at`.
+- `sessions(id, course_id, week, kind, date, starts, ends, opens_at, closes_at, auto_approve_edits, started_at, stopped_at, present)`. `present` is a trigger-kept count of its attendance rows. Status is computed: attendance is live from Start until Stop, 30 minutes or `closes_at`; registration is live from `opens_at` (or Start) until Stop or `closes_at`.
 - `attendance(session_id, student_id, marked_at, node_id, from_node, method)`, unique on `(session_id, student_id)`, method is `face | manual`.
 - `approvals(id, kind, student_id, payload, created_at)` where kind is `duplicate_face | edit`. Rows are deleted once decided.
 
-Redis holds scan tickets (2 minutes, 3 face tries each), rate-limit counters and a per-course hash of embeddings for the duplicate check.
+Redis holds scan tickets (2 minutes, 3 face tries each), rate-limit counters and the face-check log (numbers only).
 
 ## Not building
 

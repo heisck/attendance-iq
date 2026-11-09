@@ -1,7 +1,7 @@
 import type { InStatement } from "@libsql/client";
 import { fail, ip, readBody } from "@/lib/api";
 import { db, getSession, newId } from "@/lib/db";
-import { cacheEmbedding, checkFace, closestMatch, toBlob } from "@/lib/face";
+import { checkFace, closestMatch, toBlob } from "@/lib/face";
 import { allow } from "@/lib/redis";
 import { FIELDS, registerSchema, FACE_BODY, studentFields, type Field } from "@/lib/schemas";
 import { endTicket, FACE_ERRORS, faceUnavailable, redeemTicket } from "@/lib/ticket";
@@ -86,6 +86,6 @@ export async function POST(req: Request, { params }: RouteContext<"/api/s/[id]/r
     if (String(e).includes("UNIQUE")) return fail(409, `Index number ${details.indexNo} is already registered. Ask your lecturer.`);
     throw e;
   }
-  await Promise.all([endTicket(body.ticket), cacheEmbedding(s.courseId, studentId, face.embedding)]);
+  await endTicket(body.ticket);
   return Response.json({ ok: true, status: status === "active" ? "active" : "pending" });
 }

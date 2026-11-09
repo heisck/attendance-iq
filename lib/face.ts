@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { hash, redis } from "./redis";
+import { redis } from "./redis";
 import type { Step } from "./schemas";
 
 // Modal does the heavy compute (face/app.py) and returns an embedding; matching happens here.
@@ -39,19 +39,17 @@ export async function checkFace(challenge: Step[], capture: { frames: string[]; 
 
 // The last 5000 face checks and 1:1 match scores, numbers only (no images, no student ids), so tuning
 // doesn't depend on Vercel's 1-hour log retention. Read with `npm run facelog`.
-export const logFace = (entry: object) =>
-  redis()
-    .pipeline()
-    .lpush("facelog", JSON.stringify({ t: Date.now(), ...entry }))
-    .ltrim("facelog", 0, 4999)
-    .exec()
-    .catch(() => undefined);
+// Trimmed on about 1 push in 20, which halves its Redis commands; the list overshoots by a few dozen at most.
+export const logFace = async (entry: object) => {
+  const p = redis().pipeline().lpush("facelog", JSON.stringify({ t: Date.now(), ...entry }));
+  if (Math.random() < 0.05) p.ltrim("facelog", 0, 4999);
+  await p.exec().catch(() => undefined);
+};
 
 // Wakes a container when the lecturer presses Start, so the first student doesn't wait on a cold start.
 export const warmFace = () => call({ warm: true }).catch(() => undefined);
 
 export const fromBase64 = (b64: string) => new Float32Array(new Uint8Array(Buffer.from(b64, "base64")).buffer);
-export const toBase64 = (e: Float32Array) => Buffer.from(e.buffer, e.byteOffset, e.byteLength).toString("base64");
 export const toBlob = (e: Float32Array) => new Uint8Array(e.buffer, e.byteOffset, e.byteLength);
 export const fromBlob = (b: ArrayBuffer) => new Float32Array(b.slice(0));
 
@@ -62,41 +60,17 @@ export function cosine(a: Float32Array, b: Float32Array) {
   return s;
 }
 
-// Every registered face in a course, cached in Redis as one hash (student id -> base64 embedding).
-// The "_" field marks the hash as loaded, so an empty course is cached too.
-const embKey = (courseId: string) => `emb:${courseId}`;
-
-async function courseEmbeddings(courseId: string) {
-  const cached = await hash(embKey(courseId));
-  if (cached?._) {
-    delete cached._;
-    return Object.entries(cached);
-  }
-  const rows = await db.execute({ sql: "SELECT id, embedding FROM students WHERE course_id = ? AND embedding IS NOT NULL", args: [courseId] });
-  const all = rows.rows.map((r) => [r.id as string, toBase64(fromBlob(r.embedding as ArrayBuffer))] as [string, string]);
-  await redis()
-    .pipeline()
-    .hset(embKey(courseId), { _: "1", ...Object.fromEntries(all) })
-    .expire(embKey(courseId), 86_400)
-    .exec();
-  return all;
-}
-
 // The closest registered face in the course, if it counts as a match.
 // ponytail: plain loop over the course (~1 ms per 1000 students); Turso vector search past ~50k.
 export async function closestMatch(courseId: string, embedding: Float32Array) {
   let best: { id: string; similarity: number } | null = null;
-  for (const [id, b64] of await courseEmbeddings(courseId)) {
-    const similarity = cosine(embedding, fromBase64(b64));
+  // Read fresh from Turso each time (one row per registered student): a cache shared across instances
+  // would cost as much to keep in sync, and a stale one would miss someone registering twice.
+  const { rows } = await db.execute({ sql: "SELECT id, embedding FROM students WHERE course_id = ? AND embedding IS NOT NULL", args: [courseId] });
+  for (const r of rows) {
+    const id = r.id as string;
+    const similarity = cosine(embedding, fromBlob(r.embedding as ArrayBuffer));
     if (similarity >= MATCH && (!best || similarity > best.similarity)) best = { id, similarity };
   }
   return best;
-}
-
-export async function cacheEmbedding(courseId: string, studentId: string, embedding: Float32Array | null) {
-  const key = embKey(courseId);
-  // Only touch a loaded hash; an unloaded one fills itself from Turso on next use.
-  if (!(await redis().hexists(key, "_"))) return;
-  if (embedding) await redis().hset(key, { [studentId]: toBase64(embedding) });
-  else await redis().hdel(key, studentId);
 }

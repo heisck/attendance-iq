@@ -1,7 +1,8 @@
 import { Redis } from "@upstash/redis";
 
-// Upstash holds short-lived state only: scan tickets, rate-limit counters and each course's
-// embedding cache. Losing it logs nobody out and loses no attendance.
+// Upstash holds short-lived state only: scan tickets, rate-limit counters and the face-check log.
+// Losing it logs nobody out and loses no attendance. Every command counts against the plan's
+// monthly allowance, so nothing here polls or runs on a timer.
 // Values come back as stored strings: automatic JSON parsing would turn ids like "0E1234" into numbers.
 let client: Redis | undefined;
 export const redis = () => (client ??= Redis.fromEnv({ automaticDeserialization: false }));

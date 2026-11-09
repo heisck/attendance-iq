@@ -3,7 +3,9 @@
 CREATE TABLE IF NOT EXISTS courses (
   id TEXT PRIMARY KEY,
   code TEXT NOT NULL,
-  name TEXT NOT NULL
+  name TEXT NOT NULL,
+  students INTEGER NOT NULL DEFAULT 0,
+  registered INTEGER NOT NULL DEFAULT 0
 );
 
 -- Roster and registrations share one table. A roster import adds rows with no embedding;
@@ -35,7 +37,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   closes_at INTEGER NOT NULL,
   auto_approve_edits INTEGER NOT NULL DEFAULT 0,
   started_at INTEGER,
-  stopped_at INTEGER
+  stopped_at INTEGER,
+  present INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS sessions_course ON sessions (course_id);
 
@@ -62,3 +65,28 @@ CREATE TABLE IF NOT EXISTS approvals (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS approvals_student ON approvals (student_id);
+
+-- Counters, so lecturer pages and the live poll read one row instead of counting thousands
+-- (Turso bills every row a count scans). Triggers keep them exact whichever path writes;
+-- the UPDATEs below recount from scratch, so each migrate also repairs any drift.
+-- courses.students / registered: roster size and faces enrolled. sessions.present: marks.
+CREATE TRIGGER IF NOT EXISTS students_added AFTER INSERT ON students BEGIN
+  UPDATE courses SET students = students + 1, registered = registered + (NEW.embedding IS NOT NULL) WHERE id = NEW.course_id;
+END;
+CREATE TRIGGER IF NOT EXISTS students_removed AFTER DELETE ON students BEGIN
+  UPDATE courses SET students = students - 1, registered = registered - (OLD.embedding IS NOT NULL) WHERE id = OLD.course_id;
+END;
+CREATE TRIGGER IF NOT EXISTS students_face AFTER UPDATE OF embedding ON students
+WHEN (OLD.embedding IS NULL) <> (NEW.embedding IS NULL) BEGIN
+  UPDATE courses SET registered = registered + (NEW.embedding IS NOT NULL) - (OLD.embedding IS NOT NULL) WHERE id = NEW.course_id;
+END;
+CREATE TRIGGER IF NOT EXISTS attendance_added AFTER INSERT ON attendance BEGIN
+  UPDATE sessions SET present = present + 1 WHERE id = NEW.session_id;
+END;
+CREATE TRIGGER IF NOT EXISTS attendance_removed AFTER DELETE ON attendance BEGIN
+  UPDATE sessions SET present = present - 1 WHERE id = OLD.session_id;
+END;
+UPDATE courses SET
+  students = (SELECT count(*) FROM students s WHERE s.course_id = courses.id),
+  registered = (SELECT count(embedding) FROM students s WHERE s.course_id = courses.id);
+UPDATE sessions SET present = (SELECT count(*) FROM attendance a WHERE a.session_id = sessions.id);

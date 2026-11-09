@@ -6,7 +6,7 @@ Face-verified class attendance with rotating QR codes. One deployment per lectur
 |---|---|---|
 | Web app, API, matching | Next.js on Vercel | `app/`, `lib/` |
 | Database | Turso (libSQL) | `db/schema.sql` |
-| Tickets, rate limits, embedding cache | Upstash Redis | `lib/redis.ts` |
+| Tickets, rate limits, face-check log | Upstash Redis | `lib/redis.ts` |
 | Liveness, anti-spoof, embeddings | Modal (CPU) | `face/app.py` |
 
 ## Run locally
@@ -45,7 +45,9 @@ Checks: `npm test` (QR signing, timing rules, CSV), `npx tsc --noEmit`, `npm run
 - **Scan → ticket** costs one Redis write. **Face check** costs one Redis read, one Turso read, the Modal call and one Turso write. Session rows are cached in memory for 5 s per server instance.
 - **Modal** runs 2 checks per 2-CPU container and scales to 40 containers (about 80 checks in flight). A check takes about 1 s on Modal's CPUs (6 frames plus ~33 snapshots). Pressing Start wakes a container ahead of the rush. To go higher, raise `max_containers` in `face/app.py`.
 - **Turso** client allows 200 requests in flight per server instance (`lib/db.ts`; the library default of 20 queued a whole class).
-- **Duplicate check** compares against every face in the course, cached in Redis as one hash per course.
+- **Duplicate check** compares against every face in the course, read fresh from Turso (one row per registered student).
+- **Counts** (roster size, faces registered, marks per session) are counter columns kept exact by triggers in `db/schema.sql`, so lecturer pages read one row per session instead of counting every mark ever taken. `npm run db:migrate` also recounts them from scratch.
+- **Live view** polls every 3 s while its tab is visible: two rows when nothing changed; the per-phone list is re-read only when the count moves.
 - Per-IP limits on student routes assume a whole class shares one campus IP (600–1500 per 10 minutes). Sign-in stays at 5 per 10 minutes.
 
 Measured (October 2026):

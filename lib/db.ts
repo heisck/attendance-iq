@@ -72,12 +72,11 @@ function toSession(r: Row): Session {
   return { ...s, status: sessionStatus(s) };
 }
 
+// Counts come from counter columns kept by triggers (db/schema.sql), so this reads one row per session
+// and course instead of counting every student and every mark ever taken.
 const SESSIONS = `
-  SELECT se.*, c.code, c.name AS course_name, st.total, st.registered, a.present
-  FROM sessions se
-  JOIN courses c ON c.id = se.course_id
-  LEFT JOIN (SELECT course_id, count(*) AS total, count(embedding) AS registered FROM students GROUP BY course_id) st ON st.course_id = se.course_id
-  LEFT JOIN (SELECT session_id, count(*) AS present FROM attendance GROUP BY session_id) a ON a.session_id = se.id`;
+  SELECT se.*, c.code, c.name AS course_name, c.students AS total, c.registered
+  FROM sessions se JOIN courses c ON c.id = se.course_id`;
 
 // Lecturer pages: every session with its counts.
 export async function listSessions() {
@@ -85,7 +84,7 @@ export async function listSessions() {
 }
 
 // Student routes hit this on every request, a class at a time, so each server instance keeps rows
-// for a few seconds. No counts. Status is recomputed on every read.
+// for a few seconds. Status is recomputed on every read.
 // ponytail: Stop reaches other instances up to SESSION_TTL_MS late; push invalidation via Redis if that matters.
 const SESSION_TTL_MS = 5_000;
 const sessionCache = new Map<string, { at: number; row: Row | undefined }>();
@@ -94,10 +93,7 @@ const sessionCache = new Map<string, { at: number; row: Row | undefined }>();
 export async function getSession(id: string, fresh = false) {
   let hit = sessionCache.get(id);
   if (fresh || !hit || Date.now() - hit.at > SESSION_TTL_MS) {
-    const res = await db.execute({
-      sql: "SELECT se.*, c.code, c.name AS course_name FROM sessions se JOIN courses c ON c.id = se.course_id WHERE se.id = ?",
-      args: [id],
-    });
+    const res = await db.execute({ sql: `${SESSIONS} WHERE se.id = ?`, args: [id] });
     hit = { at: Date.now(), row: res.rows[0] };
     if (sessionCache.size > 500) sessionCache.clear();
     sessionCache.set(id, hit);
@@ -105,23 +101,8 @@ export async function getSession(id: string, fresh = false) {
   return hit.row ? toSession(hit.row) : null;
 }
 
-// Live view counts for one session, read through indexes only (it is polled every few seconds).
-export async function sessionCounts(s: Pick<Session, "id" | "courseId" | "kind">) {
-  const res = await db.execute({
-    sql: `SELECT (SELECT count(*) FROM students WHERE course_id = ?1) AS total,
-      (SELECT count(*) FROM attendance WHERE session_id = ?2) AS present,
-      (SELECT count(*) FROM students WHERE course_id = ?1 AND embedding IS NOT NULL) AS registered`,
-    args: [s.courseId, s.id],
-  });
-  const r = res.rows[0];
-  return { total: Number(r.total), done: Number(s.kind === "registration" ? r.registered : r.present) };
-}
-
 export async function listCourses(): Promise<Course[]> {
-  const res = await db.execute(`
-    SELECT c.id, c.code, c.name, count(s.id) AS students, count(s.embedding) AS registered
-    FROM courses c LEFT JOIN students s ON s.course_id = c.id
-    GROUP BY c.id ORDER BY c.code`);
+  const res = await db.execute("SELECT id, code, name, students, registered FROM courses ORDER BY code");
   return res.rows.map((r) => ({ id: r.id as string, code: r.code as string, name: r.name as string, students: Number(r.students), registered: Number(r.registered) }));
 }
 
@@ -151,6 +132,7 @@ export async function courseMarks(courseId: string) {
   return res.rows.map((r) => `${r.session_id}:${r.student_id}`);
 }
 
+// Reads every mark in the session, so the live poll only calls it when the count has moved.
 export async function liveNodes(sessionId: string): Promise<Node[]> {
   const res = await db.execute({
     sql: "SELECT node_id, min(from_node) AS from_node, count(*) AS marked FROM attendance WHERE session_id = ? AND node_id IS NOT NULL GROUP BY node_id",

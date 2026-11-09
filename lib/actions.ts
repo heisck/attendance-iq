@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { parseCsv } from "./csv";
 import { db, getSession, newId } from "./db";
-import { cacheEmbedding, warmFace } from "./face";
+import { warmFace } from "./face";
 import { sessionSchema, studentFields, type Field } from "./schemas";
 import { isLecturer } from "./ticket";
 import { zoned } from "./time";
@@ -75,15 +75,13 @@ export async function setMark(sessionId: string, studentId: string, present: boo
 export async function resetFace(studentId: string) {
   await lecturer();
   const sid = id(studentId);
-  const [student] = await db.batch(
+  await db.batch(
     [
-      { sql: "SELECT course_id FROM students WHERE id = ?", args: [sid] },
       { sql: "UPDATE students SET embedding = NULL, status = 'active' WHERE id = ?", args: [sid] },
       { sql: "DELETE FROM approvals WHERE student_id = ?", args: [sid] },
     ],
     "write",
   );
-  if (student.rows[0]) await cacheEmbedding(student.rows[0].course_id as string, sid, null);
   refresh();
 }
 
@@ -132,7 +130,7 @@ export async function decideApproval(approvalId: string, approve: boolean): Prom
   await lecturer();
   const ap = (
     await db.execute({
-      sql: "SELECT ap.id, ap.kind, ap.payload, ap.student_id, s.course_id, s.on_roster FROM approvals ap JOIN students s ON s.id = ap.student_id WHERE ap.id = ?",
+      sql: "SELECT ap.id, ap.kind, ap.payload, ap.student_id, s.on_roster FROM approvals ap JOIN students s ON s.id = ap.student_id WHERE ap.id = ?",
       args: [id(approvalId)],
     })
   ).rows[0];
@@ -161,6 +159,5 @@ export async function decideApproval(approvalId: string, approve: boolean): Prom
     if (String(e).includes("UNIQUE")) return { error: "That index number already belongs to another student. Fix the roster first." };
     throw e;
   }
-  if (!approve && !(ap.kind === "edit" && ap.on_roster)) await cacheEmbedding(ap.course_id as string, sid, null);
   refresh();
 }

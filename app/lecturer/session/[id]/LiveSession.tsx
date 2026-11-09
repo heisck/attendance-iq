@@ -33,19 +33,28 @@ export function LiveSession({ session, nodes }: { session: Session; nodes: Node[
   const byMarked = [...live.nodes].sort((a, b) => b.marked - a.marked);
   const closesIn = reg ? session.closesAt - now : Math.min((live.startedAt ?? now) + AUTO_CLOSE_MS, session.closesAt) - now;
 
+  // Sends the count it already has, so the server can skip re-reading the phone list when nothing moved.
+  const done = useRef(session.done);
   const poll = useCallback(async () => {
-    const r = await fetch(`/api/lecturer/sessions/${session.id}/live`).catch(() => null);
-    if (r?.ok) setLive(await r.json());
+    const r = await fetch(`/api/lecturer/sessions/${session.id}/live?done=${done.current}`).catch(() => null);
+    if (!r?.ok) return;
+    const next: Omit<Live, "nodes"> & { nodes?: Node[] } = await r.json();
+    done.current = next.done;
+    setLive((l) => ({ ...next, nodes: next.nodes ?? l.nodes }));
   }, [session.id]);
 
-  // While live: the clock ticks every second, counts and phones refresh every few seconds.
+  // While live: the clock ticks every second, counts and phones refresh every few seconds. A hidden tab
+  // skips the refresh (nobody is looking) and catches up the moment it's shown again.
   useEffect(() => {
     if (!running) return;
+    const refresh = () => !document.hidden && poll();
     const clock = setInterval(() => setNow(Date.now()), 1000);
-    const counts = setInterval(poll, POLL_MS);
+    const counts = setInterval(refresh, POLL_MS);
+    document.addEventListener("visibilitychange", refresh);
     return () => {
       clearInterval(clock);
       clearInterval(counts);
+      document.removeEventListener("visibilitychange", refresh);
     };
   }, [running, poll]);
 
