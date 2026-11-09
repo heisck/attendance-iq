@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { fail } from "./api";
 import { newId } from "./db";
 import { allow, refund, spend } from "./redis";
-import type { Step } from "./schemas";
+import type { Challenge } from "./challenge";
 import { COOKIE, isLecturerCookie, seal, unseal } from "./sign";
 
 // A scan ticket: issued when a fresh QR code (or a node token) reaches the server, then carried by the
@@ -11,7 +11,7 @@ import { COOKIE, isLecturerCookie, seal, unseal } from "./sign";
 export const TICKET_TTL_S = 120;
 const MAX_TRIES = 3;
 
-type Ticket = { session: string; node: string; from: string; challenge: Step[] };
+type Ticket = { session: string; node: string; from: string; challenge: Challenge };
 type Issued = Ticket & { id: string; exp: number };
 
 export const issueTicket = (t: Ticket) => seal("ticket", { ...t, id: newId(16), exp: Date.now() + TICKET_TTL_S * 1000 });
@@ -29,16 +29,19 @@ export async function redeemTicket(ticket: string, sessionId: string): Promise<I
 export const endTicket = (t: Issued) => spend(`t:${t.id}`, MAX_TRIES);
 
 export const FACE_ERRORS = {
-  no_face: "We lost your face partway. Keep your face filling the oval, in good light, and try again.",
-  challenge: "We couldn't see you follow the moves. Try again, turning a bit further each time.",
+  no_face: "We lost your face partway. Keep your face in the oval the whole time, and try again.",
+  approach: "We couldn't see you come closer. Bring the phone in until your face fills the oval.",
+  flash: "We couldn't see the screen's light on your face. Get out of direct sunlight, turn your screen brightness up, and try again.",
   same_face: "A different face appeared during the check. One person at a time, please.",
   spoof: "That looked like a photo or a screen. Use your own face, live.",
-  continuity: "We lost track of your face. Keep it in the oval the whole time and turn smoothly.",
+  continuity: "We lost track of your face. Keep it in the oval the whole time and move smoothly.",
 };
 
-// The face service being down isn't the student's fault, so it gives the try back.
+// For outcomes that aren't the student's fault (the face service down, a face we couldn't place).
+export const refundTry = (t: Issued) => refund(`t:${t.id}`);
+
 export async function faceUnavailable(t: Issued) {
-  await refund(`t:${t.id}`);
+  await refundTry(t);
   return fail(503, "Face check is busy. Wait a few seconds and try again.");
 }
 

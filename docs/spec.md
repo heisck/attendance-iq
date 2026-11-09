@@ -13,7 +13,7 @@ Status: **Live data.** Turso, Upstash and the Modal face service are wired in; s
 | Scan tickets, rate limits, face-check log | Upstash Redis |
 | Face liveness, face embedding | Modal (Python, CPU). Only the heavy compute lives here. |
 
-Modal is stateless: frames and the challenge in, `{ ok, reason?, embedding? }` out (`reason` is `no_face`, `challenge`, `same_face` or `spoof`). Vercel does the comparison against stored embeddings and writes to Turso. Models: YuNet (face + landmarks), SFace (128-d embedding), MiniFASNetV2 (anti-spoof), all on OpenCV's DNN module on CPU.
+Modal is stateless: frames and the challenge in, `{ ok, reason?, embedding? }` out (`reason` is `no_face`, `continuity`, `approach`, `flash`, `same_face` or `spoof`). Vercel does the comparison against stored embeddings and writes to Turso. Models: YuNet (face + landmarks), SFace (128-d embedding), MiniFASNetV2 (anti-spoof), all on OpenCV's DNN module on CPU.
 
 ## Who uses it
 
@@ -50,9 +50,9 @@ Fields: full name, student email, student number, index number (student number a
 ## Student attendance (link in Attendance mode)
 
 1. Open the link on a phone and scan the QR code from the lecturer's screen, or from any node.
-2. Enter the index number.
-3. Face + liveness check, matched 1:1 against that index number's registered face.
-4. Marked present. Marking twice shows "already marked".
+2. Face + liveness check, matched against every registered face in the course: no index number. The best match is taken only if it scores at least `MATCH_1N` and beats the runner-up by `MARGIN` (`lib/face.ts`).
+3. If the server can't tell who it is, the phone asks for the index number and sends the same capture again (no new filming, and it doesn't use up a try). The typed student must match (`MATCH`) and be about the best match (within `MARGIN` of it), so nobody marks a lookalike classmate by typing their number.
+4. Marked present, showing the index number the face was matched to. Marking twice shows "already marked"; the search covers students already marked, so marking yourself again can't land on a lookalike.
 5. This tab is now a **node**. It can show its own rotating QR code so friends can scan it. It can also verify another person on the same phone, one after another, with no limit.
 6. Refreshing or closing the tab ends the node. The QR codes are gone.
 
@@ -70,28 +70,32 @@ Chain depth is unlimited. The rotating code is what protects it.
 
 All on the server (Modal). The phone only captures frames.
 
-1. The server sends a random challenge: look straight, then turn left and right in random order. An arrow on the camera view shows which way to turn. ("Look up" is supported but not asked: head tilt barely registers from face landmarks.)
-2. The phone uploads 6 frames (300×400, ~20–30 KB each: the 3:4 area the preview shows) plus a small snapshot every 200 ms for the whole check (~33 × 3–5 KB), with the scan ticket. These endpoints' body limit is ~600 KB; every other endpoint uses the default 32 KB.
-3. The server checks that:
+1. The ticket carries a random challenge (`lib/challenge.ts`, picked with Web Crypto): 8 screen colours and an oval at a random spot and size.
+2. The student starts at arm's length in a small oval with the screen white (a ring light in a dim room), then the screen shows the colours, 400 ms each (2.5 changes a second, under WCAG's 3-flashes limit, with soft transitions), while they bring the phone closer until their face fills the challenge's oval. About 4 seconds in all. No turning.
+3. The phone uploads 4 frames (300×400, ~20–30 KB each: the 3:4 area the preview shows; 2 far, 2 close in the last colour, white) plus a small snapshot every 100 ms (~42 × 4–7 KB), each with its time from the flash start, and the scan ticket. These endpoints' body limit is ~1.2 MB; every other endpoint uses the default 32 KB.
+4. The server checks that:
    - the face never leaves the snapshots and never jumps between them (photos swapped in front of the camera do both), and each frame is the picture its snapshot was taken from,
-   - the movement matches the challenge,
-   - every frame shows the same face (the person doing the challenge is the person submitting),
-   - an anti-spoof model doesn't flag a print or a screen,
-   - the face matches the registered embedding (1:1).
+   - the face grew and ended up in the challenge's oval (a pre-recorded clip doesn't line up),
+   - coming closer changed the face's proportions the way a real head does (the nose is nearer the lens than the cheeks); a photo or a screen only gets bigger,
+   - the face's colour followed the screen's sequence, measured against the background so the camera's auto white balance cancels out (a replayed video or a virtual camera never saw those colours),
+   - every frame shows the same face, and an anti-spoof model doesn't flag a print or a screen,
+   - the face matches a registered embedding (see attendance above).
+5. YuNet also runs on the phone (onnxruntime-web, the runtime from jsDelivr, ~3.8 MB compressed, cached after the first time) for hints only: "move closer", "centre your face", "too dark". It holds the Start button until the face sits in the oval. Nothing it says is trusted; until it loads, or where it can't run, the check works without hints.
 4. Frames are processed in memory and dropped. **Only embeddings are stored. No photos.** (The duplicate-evidence photo stays on the lecturer's device.) Failed checks log numbers only, for tuning.
 
-Duplicate check speed: comparing one embedding against a course's embeddings is a plain loop. 1000 students × 128 floats takes about 1 ms. Embeddings are read fresh from Turso for each registration (a shared cache would cost as much to keep in sync, and a stale one would miss someone registering twice). Turso's vector search is the upgrade path if a single deployment ever passes ~50k students.
+Matching speed: comparing one embedding against a course's embeddings is a plain loop. 1000 students × 128 floats takes about 1 ms. Embeddings are read fresh from Turso for each registration (a shared cache would cost as much to keep in sync, and a stale one would miss someone registering twice). Turso's vector search is the upgrade path if a single deployment ever passes ~50k students.
 
 ## Known limits (accepted for v1)
 
 | Attack | Status |
 |---|---|
 | Photo of the QR sent to someone at home | Blocked (1 s rotation, 3 s server window) |
-| A printed photo or a phone screen held to the camera | Blocked (challenge + anti-spoof) |
+| A printed photo or a phone screen held to the camera | Blocked (depth + colour flash + anti-spoof) |
+| A pre-recorded video of the student, held up or through a virtual camera | Blocked (colour flash: the video never saw the colours; the oval's spot is random) |
 | Faking a "matched" result or replaying an embedding | Blocked (server-side verification) |
 | One person registering as two people | Blocked (duplicate check + lecturer approval) |
 | Live video call relaying the QR code | **Not blocked.** Lecturer sees marks per node. |
-| Real-time deepfake through a virtual camera | **Not blocked.** The phone-only gate makes it harder; the browser type can be faked. |
+| Real-time deepfake through a virtual camera | **Not blocked.** It would have to relight the face with the screen's colours as they change; the phone-only gate makes it harder; the browser type can be faked. |
 | Twins marking for each other after approval | **Not blocked.** |
 | A node token or QR key copied to an absent friend's phone | **Not blocked.** Their marks show under that node, which the lecturer sees flagged once it marks many people. |
 

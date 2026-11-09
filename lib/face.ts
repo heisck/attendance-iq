@@ -1,21 +1,26 @@
 import { db } from "./db";
 import { redis } from "./redis";
-import type { Step } from "./schemas";
+import { COLORS, type Challenge } from "./challenge";
 
 // Modal does the heavy compute (face/app.py) and returns an embedding; matching happens here.
 
-// SFace cosine similarity at or above this = same person (OpenCV's published threshold).
+// SFace cosine similarity at or above this = same person (OpenCV's published threshold). Used where the
+// student said who they are (an index number), and for duplicates at registration.
 export const MATCH = 0.363;
-
-// Straight on, then both turns in random order. "up" stays supported by the face service but isn't asked:
-// landmark pitch barely moves on a natural look-up (real attempts measured 0.04-0.08 of the 0.10 needed),
-// while turns register several times over.
-export function pickChallenge(): Step[] {
-  return Math.random() < 0.5 ? ["center", "left", "right"] : ["center", "right", "left"];
-}
+// With no index number, the best face in the course is taken only if it scores at least MATCH_1N and beats
+// the runner-up by MARGIN; otherwise the phone asks for the index number. Set from SFace on LFW (5,749
+// public figures, one photo enrolled, another as the probe; 3,000 simulated check-ins per class size):
+// classes of 50-300 got ~90% matched with no number, ~10% asked for it, 0.03% matched to the wrong person;
+// 600-1000 the same, but 0.17% wrong, flat however high the bar went (LFW's own mislabelled duplicates,
+// most likely). Real check-ins should do better (same phone setup, four frames averaged). Retune on real
+// classes with `npm run facelog` (need_index vs match, top and margin).
+export const MATCH_1N = 0.52;
+export const MARGIN = 0.1;
 
 // detail: the check's scores (numbers only), for the one log entry the caller writes on a pass.
-export type FaceResult = { ok: true; embedding: Float32Array; detail?: object } | { ok: false; reason: "no_face" | "challenge" | "same_face" | "spoof" | "continuity" };
+export type FaceResult =
+  | { ok: true; embedding: Float32Array; detail?: object }
+  | { ok: false; reason: "no_face" | "approach" | "flash" | "same_face" | "spoof" | "continuity" };
 
 async function call(body: object) {
   const json = JSON.stringify(body);
@@ -40,16 +45,17 @@ async function call(body: object) {
   });
 }
 
-export async function checkFace(challenge: Step[], capture: { frames: string[]; track: string[]; marks: number[] }): Promise<FaceResult> {
-  const r = await call({ challenge, frames: capture.frames, track: capture.track, marks: capture.marks });
-  // Numbers only (how far each move got), for tuning TURN / TILT in face/app.py. No images are kept.
+export async function checkFace(challenge: Challenge, capture: { frames: string[]; track: string[]; marks: number[]; times: number[] }): Promise<FaceResult> {
+  const { frames, track, marks, times } = capture;
+  const r = await call({ frames, track, marks, times, colors: challenge.colors.map((i) => COLORS[i]), oval: challenge.oval });
+  // Numbers only (each check's scores), for tuning the knobs in face/app.py. No images are kept.
   if (!r.ok) console.warn(`face check failed: ${r.reason}${r.detail ? ` ${JSON.stringify(r.detail)}` : ""}`);
   // A pass is logged once by the caller, together with what it did next (match score, or registered).
   if (!r.ok) await logFace({ result: r.reason, ...r.detail });
   return r.ok ? { ok: true, embedding: fromBase64(r.embedding), detail: r.detail } : { ok: false, reason: r.reason };
 }
 
-// The last 5000 face checks and 1:1 match scores, numbers only (no images, no student ids), so tuning
+// The last 5000 face checks and match scores, numbers only (no images, no student ids), so tuning
 // doesn't depend on Vercel's 1-hour log retention. Read with `npm run facelog`.
 // Trimmed on about 1 push in 20, which halves its Redis commands; the list overshoots by a few dozen at most.
 export const logFace = async (entry: object) => {

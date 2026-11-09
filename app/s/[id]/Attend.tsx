@@ -7,11 +7,12 @@ import { PillField } from "@/components/PillField";
 import { QrScanner } from "@/components/QrScanner";
 import { RotatingQr, type QrSource } from "@/components/RotatingQr";
 import { post } from "@/lib/post";
-import type { Step as Move } from "@/lib/schemas";
+import type { Challenge } from "@/lib/challenge";
 
 type Step = "scan" | "index" | "face" | "done" | "node" | "closed";
-const PROGRESS: Step[] = ["scan", "index", "face", "done"];
-type Ticket = { ticket: string; challenge: Move[] };
+// The index step only shows when the server couldn't tell who the face is (it counts as part of "face").
+const PROGRESS: Step[] = ["scan", "face", "done"];
+type Ticket = { ticket: string; challenge: Challenge };
 
 
 export function Attend({ title, sessionId }: { title: string; sessionId: string }) {
@@ -22,6 +23,10 @@ export function Attend({ title, sessionId }: { title: string; sessionId: string 
   const [marked, setMarked] = useState(0);
   const [markedAt, setMarkedAt] = useState(0);
   const [ticket, setTicket] = useState<Ticket | null>(null);
+  // A new key re-films after a failed check. The last capture is kept for the index-number fallback.
+  const [attempt, setAttempt] = useState(0);
+  const [matchedIndex, setMatchedIndex] = useState("");
+  const capture = useRef<Capture | null>(null);
   // Set after the first mark: lets this tab show codes, and keeps it one phone in the lecturer's list.
   // Every person marked here still scans a live code first (that's what shows they're in the room).
   const [node, setNode] = useState("");
@@ -36,7 +41,7 @@ export function Attend({ title, sessionId }: { title: string; sessionId: string 
     if (!r.ok) return setError(r.error);
     setTicket(r.data);
     setError("");
-    setStep("index");
+    setStep("face");
   }
 
   const scanned = (code: string) => {
@@ -44,9 +49,13 @@ export function Attend({ title, sessionId }: { title: string; sessionId: string 
     if (!busy && code.startsWith(`${sessionId}.`)) getTicket(code);
   };
 
-  async function faceDone(capture: Capture) {
-    const r = await post(`/api/s/${sessionId}/attend`, { ticket: ticket!.ticket, indexNo, ...capture, company: company.current });
+  // No index number first: the server matches the face against the course. indexNo only after it asked.
+  async function submit(withIndex?: string) {
+    setBusy(true);
+    const r = await post(`/api/s/${sessionId}/attend`, { ticket: ticket!.ticket, indexNo: withIndex, ...capture.current!, company: company.current });
+    setBusy(false);
     if (r.ok) {
+      setMatchedIndex(r.data.indexNo);
       // The phone's clock may be off; codes must carry the server's time, so keep the difference.
       setQr({ ...r.data.qr, sessionId, offset: r.data.markedAt - Date.now() });
       setNode(r.data.node ?? node);
@@ -61,12 +70,22 @@ export function Attend({ title, sessionId }: { title: string; sessionId: string 
       setTicket(null);
       return setStep("scan");
     }
-    setStep("index");
+    // Couldn't tell who it was, or the typed number didn't fit: (re)type the number, same capture.
+    if (r.data.needIndex || (withIndex && (r.status === 404 || r.status === 422))) return setStep("index");
+    // The face check itself failed (or the student can't be marked): film again.
+    setAttempt((a) => a + 1);
+    setStep("face");
+  }
+
+  function faceDone(c: Capture) {
+    capture.current = c;
+    submit();
   }
 
   // The next person on this phone starts by scanning a live code, like everyone else.
   function nextPerson() {
     setIndexNo("");
+    capture.current = null;
     setTicket(null);
     setError("");
     setStep("scan");
@@ -85,7 +104,7 @@ export function Attend({ title, sessionId }: { title: string; sessionId: string 
 
   return (
     <main className="phone">
-      <PhoneHead title={title} steps={step === "node" ? undefined : PROGRESS.length} at={PROGRESS.indexOf(step)}>
+      <PhoneHead title={title} steps={step === "node" ? undefined : PROGRESS.length} at={PROGRESS.indexOf(step === "index" ? "face" : step)}>
         {marked > 0 && <span className="pill pill-ink">{marked} marked</span>}
       </PhoneHead>
 
@@ -109,12 +128,11 @@ export function Attend({ title, sessionId }: { title: string; sessionId: string 
             e.preventDefault();
             company.current = String(new FormData(e.currentTarget).get("company") ?? "");
             setError("");
-            setStep("face");
+            submit(indexNo);
           }}
         >
           <div className="phone-body">
-            {!error && <p className="notice notice-ok">Code accepted. You have 2 minutes to finish.</p>}
-            <h1>{marked > 0 ? "Next person" : "Your index number"}</h1>
+            <h1>Your index number</h1>
             <PillField
               id="index"
               label="Index number"
@@ -126,7 +144,7 @@ export function Attend({ title, sessionId }: { title: string; sessionId: string 
               onChange={(e) => setIndexNo(e.target.value.replace(/\D/g, ""))}
               icon={<path d="M9 4 7 20M17 4l-2 16M4.5 9h15M4 15h15" />}
             />
-            <p className="hint">The face check compares you against this student&apos;s registered face.</p>
+            <p className="hint">Your face check passed, but looked close to a classmate&apos;s. Your number settles it; no need to film again.</p>
             <div className="honeypot" aria-hidden="true">
               <label htmlFor="company">Company</label>
               <input id="company" name="company" tabIndex={-1} autoComplete="off" />
@@ -138,20 +156,20 @@ export function Attend({ title, sessionId }: { title: string; sessionId: string 
             )}
           </div>
           <div className="phone-foot">
-            <button className="btn btn-ink btn-block" disabled={indexNo.length < 4}>
-              Continue to face check
+            <button className="btn btn-ink btn-block" disabled={indexNo.length < 4 || busy}>
+              {busy ? "Checking…" : "Finish with this number"}
             </button>
           </div>
         </form>
       )}
 
-      {step === "face" && ticket && <FaceCheck challenge={ticket.challenge} onFrames={faceDone} />}
+      {step === "face" && ticket && <FaceCheck key={attempt} challenge={ticket.challenge} onFrames={faceDone} error={error} />}
 
       {step === "done" && (
         <>
           <PhoneState icon="check" title="Marked present">
             <p className="muted">
-              Index <span className="mono">{indexNo}</span> · {new Date(markedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              Index <span className="mono">{matchedIndex}</span> · {new Date(markedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
             </p>
             <p className="notice">Keep this tab open to help classmates. Refreshing or closing it ends that.</p>
           </PhoneState>

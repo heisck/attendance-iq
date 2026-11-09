@@ -9,16 +9,20 @@
     uv run face/bench.py check --save NAME   ...and keep the raw capture to re-run later
     uv run face/bench.py replay NAME         re-run a saved capture (after changing a knob in app.py)
 
-The window works like the phone: mirrored preview, oval, instructions; press SPACE to start, Q to quit.
-Captures are cut, sized and JPEG-compressed exactly like components/FaceCheck.tsx, then judged by the same
-analyze() as Modal (face/app.py). Filters fake what a phone sees in a dim hall, through a smudged lens, etc.
-They're applied to the raw picture before compression, so the phone's JPEG losses come on top, as in life.
-Real light (a dark room, a window behind you) still beats a filter: use both.
+The check is the phone's (components/FaceCheck.tsx): sit at arm's length with your face in the small oval,
+press SPACE, hold still for a second, then bring your face closer into the big oval while the screen
+changes colour. Q quits. The laptop screen is the light source, as the phone's is, so run it full screen
+with the brightness up. Captures are cut, timed, sized and JPEG-compressed like the phone's, then judged by
+the same analyze() as Modal (face/app.py).
+Filters fake what a phone sees in a dim hall, through a smudged lens, etc. They're applied to the raw
+picture before compression, so the phone's JPEG losses come on top, as in life. Real light (a dark room, a
+window behind you) still beats a filter: use both.
 
 Everything stays on this machine. face/.bench/ and face/.models/ are gitignored.
 """
 
-import random
+import base64
+import secrets
 import sys
 import time
 import urllib.request
@@ -34,10 +38,28 @@ MODELS = HERE / ".models"
 BENCH = HERE / ".bench"
 MATCH = 0.363  # lib/face.ts
 
-# components/FaceCheck.tsx
-TRACK_MS, STEP_MS, CAPTURE_AT = 200, 2200, (1200, 1800)
-W, H, QUALITY, TRACK_W, TRACK_QUALITY = 300, 400, 75, 120, 60
-LABEL = {"center": "Look straight at the camera", "left": "Turn your head LEFT", "right": "Turn your head RIGHT", "up": "Look UP"}
+# lib/schemas.ts and components/FaceCheck.tsx
+COLORS = [(255, 255, 255), (255, 40, 40), (40, 255, 40), (40, 80, 255), (255, 255, 40), (255, 40, 255), (40, 255, 255)]
+FLASH_MS, SEQUENCE = 400, 8
+FAR_OVAL = {"x": 0.5, "y": 0.46, "w": 0.42}
+FAR_MS, TRACK_MS, FAR_AT = 1000, 100, (-600, -200)
+W, H, QUALITY, TRACK_W, TRACK_QUALITY = 300, 400, 75, 160, 60
+SCREEN_W, SCREEN_H = 1280, 800  # the window; the preview sits in the middle, the rest is the light
+
+
+def challenge():
+    """lib/face.ts pickChallenge."""
+    while True:
+        colors = []
+        while len(colors) < SEQUENCE - 1:
+            c = secrets.randbelow(len(COLORS))
+            if c != (colors[-1] if colors else None) and not (len(colors) == SEQUENCE - 2 and c == 0):
+                colors.append(c)
+        colors.append(0)
+        if len({c for c in colors if c}) >= 3:
+            break
+    between = lambda lo, hi: round(lo + secrets.randbelow(1001) / 1000 * (hi - lo), 3)
+    return colors, {"x": between(0.4, 0.6), "y": between(0.42, 0.52), "w": between(0.62, 0.74)}
 
 
 def noise(img, sigma):
@@ -104,65 +126,84 @@ def jpeg(img, width, quality):
     return cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, quality])[1].tobytes()
 
 
-def draw(frame, caption, state=None):
-    """The phone screen: mirrored preview with the oval and the caption."""
-    view = cv2.flip(centre(frame), 1)
-    view = cv2.resize(view, (W * 2, H * 2))
-    colour = (90, 200, 90) if state == "ok" else (255, 255, 255)
-    cv2.ellipse(view, (W, int(H * 0.92)), (int(W * 0.55), int(H * 0.68)), 0, 0, 360, colour, 3)
-    cv2.rectangle(view, (0, H * 2 - 60), (W * 2, H * 2), (20, 20, 20), -1)
-    cv2.putText(view, caption, (20, H * 2 - 22), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2, cv2.LINE_AA)
-    cv2.imshow("bench", view)
+def draw(frame, caption, oval, light=None):
+    """The phone screen: mirrored preview, the oval, and the light (an RGB colour) everywhere else when on."""
+    ph = SCREEN_H - 40
+    pw = ph * W // H
+    view = cv2.resize(cv2.flip(centre(frame), 1), (pw, ph))
+    ow = int(oval["w"] * pw)
+    centre_px = (int(oval["x"] * pw), int(oval["y"] * ph))
+    axes = (ow // 2, int(ow * 1.37) // 2)
+    mask = np.zeros((ph, pw), np.uint8)
+    cv2.ellipse(mask, centre_px, axes, 0, 0, 360, 255, -1)
+    fill = (np.array(light[::-1], np.uint8) if light else np.array((30, 30, 30), np.uint8))  # BGR
+    view[mask == 0] = fill if light else (view[mask == 0] * 0.45).astype(np.uint8)
+    cv2.ellipse(view, centre_px, axes, 0, 0, 360, (10, 10, 10) if light else (255, 255, 255), 3)
+    screen = np.empty((SCREEN_H, SCREEN_W, 3), np.uint8)
+    screen[:] = fill if light else (246, 244, 238)
+    x0 = (SCREEN_W - pw) // 2
+    screen[20 : 20 + ph, x0 : x0 + pw] = view
+    cv2.rectangle(screen, (x0, 20 + ph - 56), (x0 + pw, 20 + ph), (255, 255, 255), -1)
+    cv2.putText(screen, caption, (x0 + 16, 20 + ph - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (10, 10, 10), 2, cv2.LINE_AA)
+    cv2.imshow("bench", screen)
     return cv2.waitKey(1) & 0xFF
 
 
-def capture(cam, challenge):
-    """Films the challenge like FaceCheck: raw W x H pictures for the track, and which of them are frames."""
+def capture(cam, colors, oval):
+    """Films the check like FaceCheck: raw W x H snapshots with their times, and which of them are frames."""
+    cv2.namedWindow("bench", cv2.WINDOW_NORMAL)
+    cv2.setWindowProperty("bench", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
     while True:
         ok, f = cam.read()
         if not ok:
             sys.exit("Camera gave no picture.")
-        key = draw(f, "Fit your face in the oval, press SPACE")
+        key = draw(f, "Face in the small oval at arm's length, press SPACE", FAR_OVAL)
         if key == ord("q"):
             sys.exit(0)
         if key == ord(" "):
             break
-    pictures, marks = [], []
-    start = time.monotonic()
-    for n in range(len(challenge) * STEP_MS // TRACK_MS):
-        t = n * TRACK_MS
-        # Keep the preview live between snapshots, then take the next picture on the 200 ms grid.
-        while (time.monotonic() - start) * 1000 < t:
+    end = len(colors) * FLASH_MS
+    frame_at = (*FAR_AT, end - 200, end - 100)
+    pictures, times, marks = [], [], []
+    flash_at = time.monotonic() * 1000 + FAR_MS
+    for n in range((FAR_MS + end) // TRACK_MS):
+        nominal = n * TRACK_MS - FAR_MS
+        # Keep the preview and the light live between snapshots, then take the next one on the 100 ms grid.
+        while True:
+            t = time.monotonic() * 1000 - flash_at
             ok, f = cam.read()
-            draw(f, LABEL[challenge[t // STEP_MS]])
+            shown = COLORS[0] if t < 0 else COLORS[colors[min(int(t // FLASH_MS), len(colors) - 1)]]
+            draw(f, "Hold still..." if t < 0 else "Bring your face closer to fill the oval", FAR_OVAL if t < 0 else oval, shown)
+            if t >= nominal:
+                break
         pictures.append(centre(f))
-        if t % STEP_MS in CAPTURE_AT:
+        times.append(round(t))
+        if nominal in frame_at:
             marks.append(n)
-    draw(f, "Checking...", "ok")
-    return pictures, marks
+    cv2.destroyAllWindows()
+    return pictures, times, marks
 
 
-def judge(pictures, marks, challenge, fx, enrolled):
-    seen = [fx(p) for p in pictures]
+def judge(c, fx, enrolled):
+    seen = [fx(p) for p in c["pictures"]]
     track = [jpeg(p, TRACK_W, TRACK_QUALITY) for p in seen]
-    frames = [jpeg(seen[i], W, QUALITY) for i in marks]
-    r = app.analyze(app.models(str(MODELS)), frames, challenge, track, marks)
+    frames = [jpeg(seen[i], W, QUALITY) for i in c["marks"]]
+    rgb = [list(COLORS[i]) for i in c["colors"]]
+    r = app.analyze(app.models(str(MODELS)), frames, track, c["marks"], c["times"], rgb, c["oval"])
     if r.get("ok") and enrolled is not None:
-        emb = np.frombuffer(__import__("base64").b64decode(r["embedding"]), "<f4")
-        r["similarity"] = round(float(emb @ enrolled), 3)
+        r["similarity"] = round(float(np.frombuffer(base64.b64decode(r["embedding"]), "<f4") @ enrolled), 3)
     return r
 
 
-def report(pictures, marks, challenge, enrolled):
-    print(f"\nchallenge {challenge}, {len(pictures)} snapshots, frame size {sum(len(jpeg(pictures[i], W, QUALITY)) for i in marks) // 1024} KB")
-    print(f"{'filter':<12} {'result':<12} {'match':<16} scores")
+def report(c, enrolled):
+    size = sum(len(jpeg(c["pictures"][i], W, QUALITY)) for i in c["marks"]) + sum(len(jpeg(p, TRACK_W, TRACK_QUALITY)) for p in c["pictures"])
+    print(f"\n{len(c['pictures'])} snapshots, {len(c['marks'])} frames, ~{size * 4 // 3 // 1024} KB as the phone would send it")
+    print(f"{'filter':<12} {'result':<12} {'match':<12} scores")
     for name, fx in FILTERS.items():
-        r = judge(pictures, marks, challenge, fx, enrolled)
-        result = "pass" if r.get("ok") else r.get("reason", "?")
+        r = judge(c, fx, enrolled)
         sim = r.get("similarity")
         match = "" if sim is None else f"{sim} {'yes' if sim >= MATCH else 'NO'}"
-        detail = {k: v for k, v in (r.get("detail") or {}).items() if k != "frames"}
-        print(f"{name:<12} {result:<12} {match:<16} {detail}")
+        print(f"{name:<12} {'pass' if r.get('ok') else r.get('reason', '?'):<12} {match:<12} {r.get('detail', {})}")
 
 
 def ensure_models():
@@ -185,31 +226,31 @@ def main():
     enrolled = np.load(me) if me.exists() else None
 
     if cmd == "replay":
-        d = np.load(BENCH / f"{sys.argv[2]}.npz")
-        return report(list(d["pictures"]), list(d["marks"]), list(d["challenge"]), enrolled)
+        d = np.load(BENCH / f"{sys.argv[2]}.npz", allow_pickle=True)
+        return report({k: d[k].tolist() if k != "pictures" else list(d[k]) for k in d.files} | {"oval": d["oval"].item()}, enrolled)
 
     cam = cv2.VideoCapture(0)
     cam.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     if not cam.isOpened():
         sys.exit("No camera at /dev/video0.")
-    # lib/face.ts pickChallenge
-    challenge = ["center", "left", "right"] if random.random() < 0.5 else ["center", "right", "left"]
-    pictures, marks = capture(cam, challenge)
+    colors, oval = challenge()
+    pictures, times, marks = capture(cam, colors, oval)
     cam.release()
+    c = {"pictures": pictures, "times": times, "marks": marks, "colors": colors, "oval": oval}
 
     if cmd == "enroll":
-        r = judge(pictures, marks, challenge, FILTERS["clean"], None)
+        r = judge(c, FILTERS["clean"], None)
         if not r.get("ok"):
             sys.exit(f"Enrol failed: {r}")
-        np.save(me, np.frombuffer(__import__("base64").b64decode(r["embedding"]), "<f4"))
+        np.save(me, np.frombuffer(base64.b64decode(r["embedding"]), "<f4"))
         return print(f"Enrolled. Scores {r['detail']}")
     if enrolled is None:
-        print("Not enrolled yet (uv run face/bench.py enroll): match column stays empty.")
+        print("Not enrolled yet (uv run face/bench.py enroll): the match column stays empty.")
     if "--save" in sys.argv:
         name = sys.argv[sys.argv.index("--save") + 1]
-        np.savez_compressed(BENCH / f"{name}.npz", pictures=np.array(pictures), marks=marks, challenge=challenge)
+        np.savez_compressed(BENCH / f"{name}.npz", pictures=np.array(pictures), times=times, marks=marks, colors=colors, oval=np.array(oval, dtype=object))
         print(f"saved face/.bench/{name}.npz")
-    report(pictures, marks, challenge, enrolled)
+    report(c, enrolled)
 
 
 if __name__ == "__main__":

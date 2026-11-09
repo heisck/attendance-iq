@@ -1,6 +1,6 @@
 import { fail, ip, readBody } from "@/lib/api";
 import { getSession, newId } from "@/lib/db";
-import { pickChallenge } from "@/lib/face";
+import { pickChallenge } from "@/lib/challenge";
 import { allow } from "@/lib/redis";
 import { ticketSchema } from "@/lib/schemas";
 import { readCode, readNodeToken } from "@/lib/sign";

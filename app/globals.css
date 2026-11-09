@@ -2584,62 +2584,56 @@ body:has(.phone) {
   border-radius: 22px;
   box-shadow: 0 0 0 999px rgb(0 0 0 / 0.5);
 }
+/* Face check oval, placed by FaceCheck: --ox, --oy its centre and --ow its width, as shares of the
+   preview (the challenge's oval comes from the server). Its height is ~1.37x its width in pixels. */
 .frame-face {
   position: absolute;
-  inset: 12% 16% 18%;
+  left: calc((var(--ox) - var(--ow) / 2) * 100%);
+  top: calc((var(--oy) - var(--ow) * 0.515) * 100%);
+  width: calc(var(--ow) * 100%);
+  height: calc(var(--ow) * 103%);
   border: 3px solid #fff;
   border-radius: 50%;
   box-shadow: 0 0 0 999px rgb(0 0 0 / 0.55);
-  transition: border-width 250ms ease;
+  transition:
+    left 400ms ease,
+    top 400ms ease,
+    width 400ms ease,
+    height 400ms ease,
+    border-width 250ms ease;
 }
 /* Checking: a thicker ring rather than a colour, to stay in the monochrome system. */
 .frame-face[data-state="ok"] {
   border-width: 7px;
 }
-/* Face check: which way to move, beside the oval, nudging that way. */
-.face-arrow {
-  --nudge: -6px 0;
-  position: absolute;
-  top: calc(47% - 26px);
-  left: 3%;
-  display: grid;
-  place-items: center;
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  background: var(--si-white);
-  color: var(--si-ink);
-  animation: face-nudge 900ms ease-in-out infinite;
+/* The check's light: the screen floods with the colour the server picked (--flash, set on the phone body),
+   around the preview too, so the face catches as much of it as possible. Soft changes, 2.5 a second at
+   most (under WCAG's 3 flashes a second). */
+.face-light {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--flash, #fff);
+  transition: background-color 120ms linear;
 }
-.face-arrow svg {
-  width: 28px;
-  height: 28px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.camera[data-lit] {
+  position: fixed;
+  z-index: 51;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  width: min(100vw - 32px, 60svh);
 }
-.face-arrow[data-dir="right"] {
-  --nudge: 6px 0;
-  left: auto;
-  right: 3%;
-}
-.face-arrow[data-dir="right"] svg {
-  transform: scaleX(-1);
-}
-.face-arrow[data-dir="up"] {
-  --nudge: 0 -6px;
-  top: 2%;
-  left: calc(50% - 26px);
-}
-.face-arrow[data-dir="up"] svg {
-  transform: rotate(90deg);
-}
-@keyframes face-nudge {
-  50% {
-    translate: var(--nudge);
-  }
+.camera[data-lit] .frame-face {
+  border-color: var(--si-ink);
+  box-shadow: 0 0 0 999px var(--flash, #fff);
+  transition:
+    left 400ms ease,
+    top 400ms ease,
+    width 400ms ease,
+    height 400ms ease,
+    border-width 250ms ease,
+    box-shadow 120ms linear;
 }
 .camera-caption {
   position: absolute;

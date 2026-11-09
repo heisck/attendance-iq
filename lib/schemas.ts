@@ -16,29 +16,29 @@ const honeypot = { company: z.string().max(200).optional() };
 
 export const loginSchema = z.object({ email: z.string().max(200), password: z.string().max(200), ...honeypot });
 
-// Face check steps. The server picks "center" plus two others; frames come in step order.
-export const STEPS = ["center", "left", "right", "up"] as const;
-export type Step = (typeof STEPS)[number];
-// Base64 JPEGs: frames ~20-30 KB each; track, a small snapshot every 200 ms (~3-5 KB); marks, the
-// snapshot each frame was taken with.
+// Base64 JPEGs: frames ~20-30 KB each (2 far, 2 close); track, a small snapshot every 100 ms (~4-7 KB),
+// times, each snapshot's ms from the flash start; marks, the snapshot each frame was taken with.
 const FRAME = 60_000;
-const SNAPSHOT = 12_000;
+const SNAPSHOT = 16_000;
 const face = {
-  frames: z.array(z.string().max(FRAME)).min(2).max(12),
-  track: z.array(z.string().max(SNAPSHOT)).min(10).max(40),
-  marks: z.array(z.number().int().min(0).max(39)).max(12),
+  frames: z.array(z.string().max(FRAME)).min(3).max(8),
+  track: z.array(z.string().max(SNAPSHOT)).min(10).max(60),
+  times: z.array(z.number().int().min(-5_000).max(10_000)).max(60),
+  marks: z.array(z.number().int().min(0).max(59)).max(8),
 };
 // Body limit for the face routes: everything the fields above allow, plus room for the rest. A fixed
 // smaller cap rejected valid checks from noisy phone cameras (noise makes JPEGs bigger) as "too large".
-export const FACE_BODY = 12 * FRAME + 40 * SNAPSHOT + 8_000;
+export const FACE_BODY = 8 * FRAME + 60 * SNAPSHOT + 8_000;
 
 export const ticketSchema = z.object({ code: z.string().max(200).optional(), node: z.string().max(100).optional() });
 
-export const attendSchema = z.object({ ticket: z.string().max(400), indexNo: studentFields.shape.indexNo, ...face, ...honeypot });
+// No index number: the face is matched against the whole course. The phone sends one only when the server
+// couldn't tell who it was (needIndex), along with the same capture.
+export const attendSchema = z.object({ ticket: z.string().max(800), indexNo: studentFields.shape.indexNo.optional(), ...face, ...honeypot });
 
 // rosterId: the picked roster entry. fields: only what the student retyped (all four when not on the roster).
 export const registerSchema = z.object({
-  ticket: z.string().max(400),
+  ticket: z.string().max(800),
   rosterId: z.string().max(40).optional(),
   fields: studentFields.partial(),
   ...face,

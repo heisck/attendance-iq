@@ -5,7 +5,8 @@ import { FaceCheck, type Capture } from "@/components/FaceCheck";
 import { PhoneHead, PhoneState } from "@/components/Phone";
 import { PillField } from "@/components/PillField";
 import { post } from "@/lib/post";
-import { FIELDS as LABELS, studentFields, type Field, type Step as Move } from "@/lib/schemas";
+import type { Challenge } from "@/lib/challenge";
+import { FIELDS as LABELS, studentFields, type Field } from "@/lib/schemas";
 
 // A roster suggestion: the name in full, everything else masked by the server.
 type Suggestion = Record<Field, string> & { id: string };
@@ -42,7 +43,7 @@ export function Register({ title, sessionId, autoApprove }: { title: string; ses
   const [editing, setEditing] = useState<Record<Field, boolean>>({ name: true, email: true, studentNo: true, indexNo: true });
   const [consent, setConsent] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [ticket, setTicket] = useState<{ ticket: string; challenge: Move[] } | null>(null);
+  const [ticket, setTicket] = useState<{ ticket: string; challenge: Challenge } | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState(false);

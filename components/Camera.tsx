@@ -3,14 +3,17 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 
 // `video`: pass a ref to read frames from the stream (QR scanning, face capture).
+// `lit`: the face check's light is on; the preview floats above it (.face-light).
 export function Camera({
   facing,
   children,
   video: external,
+  lit,
 }: {
   facing: "user" | "environment";
   children?: React.ReactNode;
   video?: RefObject<HTMLVideoElement | null>;
+  lit?: boolean;
 }) {
   const own = useRef<HTMLVideoElement>(null);
   const video = external ?? own;
@@ -34,7 +37,7 @@ export function Camera({
   }, [facing, video]);
 
   return (
-    <div className={`camera ${facing === "user" ? "camera-mirror" : ""}`}>
+    <div className={`camera ${facing === "user" ? "camera-mirror" : ""}`} data-lit={lit || undefined}>
       <video ref={video} autoPlay playsInline muted />
       {error && (
         <div className="camera-empty">

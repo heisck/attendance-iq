@@ -5,8 +5,24 @@ Models (all run through OpenCV's DNN module on CPU, permissive licenses):
   SFace       128-d face embedding               Apache-2.0  (opencv_zoo)
   MiniFASNet  print / screen anti-spoof          MIT         (yakhyo/face-anti-spoofing, from minivision Apache-2.0)
 
+The check (components/FaceCheck.tsx films it, the ticket fixes the challenge):
+  1. far    about a second in a small oval, the screen white. Two sharp frames.
+  2. flash  the screen shows a random colour sequence the server picked, while the student brings the
+            phone closer until their face fills a big oval at a random spot. Two sharp frames at the end.
+  A small snapshot every 100 ms through both, each with its time from the flash start.
+Then, all on the server:
+  continuity  one face in every snapshot, never jumping (photos swapped in front of the camera fail)
+  approach    the face grew and ended up in the oval the server picked (a pre-recorded clip doesn't line up)
+  depth       coming closer changed the face's proportions the way a real head does; a photo or a screen
+              only gets bigger (perspective: the nose is nearer the lens than the cheeks)
+  flash       the face's colour followed the screen's colour sequence (a replayed video or a virtual camera
+              can't, it never saw those colours); measured against the background, which the screen
+              barely lights, so the camera's auto white balance cancels out
+  spoof       MiniFASNet on the far frames
+  same face   every sharp frame is the same person; their mean is the embedding
+
 Deploy:  modal deploy face/app.py
-Local:   python face/app.py <models dir> <image>...   (runs analyze() without Modal)
+Bench:   uv run face/bench.py (your webcam, judged by analyze() below)
 """
 
 import base64
@@ -20,18 +36,24 @@ MODELS = {
     "fas.onnx": "https://github.com/yakhyo/face-anti-spoofing/releases/download/weights/MiniFASNetV2.onnx",
 }
 
-# Tuning knobs. Ratios are relative to the "center" frames, so they adapt to how each phone is held.
-TURN = 0.18  # nose shift sideways, in eye-distances, for "left" / "right"
-TILT = 0.10  # nose shift up, in eye-to-mouth heights, for "up"
-SAME_FACE = 0.20  # min cosine between any frame and the center embedding (lower than a match: turned heads score worse)
-REAL = 0.50  # min mean anti-spoof "real" probability across frames
-MIN_FACE = 80  # px; smaller faces are too far away to judge
-# Continuity: small snapshots every ~200 ms through the whole check must show one face that never leaves
-# and never jumps, so swapping photos of someone (left, right, ...) in front of the camera fails.
-TRACK_GAP = 1  # snapshots in a row allowed without a face (a blur); a hand swapping photos hides it longer
+# Tuning knobs. Provisional until the bench and real classes give numbers; every result carries its scores.
+FAR = 2  # the first FAR frames are the far ones, the rest the close ones
+W, H = 300, 400  # sharp frame size (FaceCheck.tsx); the oval is in these coordinates, as a share
+CLOSER = 1.35  # min growth of the face's width, far frames to close frames
+OVAL_SHIFT = 0.12  # max distance of the close face's centre from the oval's centre, as a share of the frame
+OVAL_FIT = (0.55, 1.3)  # close face width over oval width
+DEPTH = 0.03  # min perspective change coming closer (see depth()); a flat picture shows about 0
+FLASH_MS = 400  # each colour's time on screen (FaceCheck.tsx)
+FLASH = 0.5  # min correlation between the face's colour and the screen's
+LAGS = range(0, 401, 50)  # ms the camera may run behind the screen
+SAME_FACE = 0.20  # min cosine between any frame and the mean embedding (close-up distortion scores lower)
+REAL = 0.50  # min mean anti-spoof "real" probability over the far frames
+MIN_FACE = 80  # px in a sharp frame; smaller faces are too far away to judge
+# Continuity: one face in every snapshot (every 100 ms), never leaving and never jumping.
+TRACK_GAP = 2  # snapshots in a row allowed without a face (a blur); a hand swapping photos hides it longer
 TRACK_SHIFT = 0.3  # max move of the face centre between snapshots, in face widths
-TRACK_SCALE = 1.5  # max change in face size between snapshots (a turning head's box narrows a lot)
-TRACK_TURN = 0.6  # max yaw change between snapshots (eye distances); a real turn passes through the angles between
+TRACK_SCALE = 1.5  # max change in face size between snapshots (coming closer is gradual)
+TRACK_TURN = 0.6  # max yaw change between snapshots (eye distances)
 TRACK_SAME = 14.0  # max mean grey-level difference between a frame and the snapshot taken with it (0-255)
 
 image = (
@@ -68,31 +90,46 @@ def models(path="/models") -> Models:
     return _local.m
 
 
-def frame(m: Models, jpeg: bytes):
-    img = cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
-    if img is None:
-        return None
+def decode(jpeg: bytes):
+    return cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
+
+
+def detect(m: Models, img):
+    """The biggest face: box and landmarks (right eye, left eye, nose, right and left mouth corner), or None."""
     h, w = img.shape[:2]
     m.det.setInputSize((w, h))
     _, faces = m.det.detect(img)
-    if faces is None:
-        return None
-    face = max(faces, key=lambda f: f[2] * f[3])
-    x, y, bw, bh = face[:4]
-    if min(bw, bh) < MIN_FACE:
-        return None
-    # Landmarks: right eye, left eye, nose tip, right mouth corner, left mouth corner (subject's sides).
-    eye_r, eye_l, nose, mouth_r, mouth_l = face[4:14].reshape(5, 2)
-    eyes = (eye_r + eye_l) / 2
-    mouth = (mouth_r + mouth_l) / 2
-    eye_dist = max(np.linalg.norm(eye_l - eye_r), 1.0)
-    yaw = (nose[0] - eyes[0]) / eye_dist
-    pitch = (nose[1] - eyes[1]) / max(mouth[1] - eyes[1], 1.0)
+    return None if faces is None else max(faces, key=lambda f: f[2] * f[3])
 
+
+def shape(face):
+    """Where the face is and its proportions: centre, size, yaw, and the two depth ratios."""
+    x, y, bw, bh = face[:4]
+    eye_r, eye_l, nose = face[4:10].reshape(3, 2)
+    eyes = (eye_r + eye_l) / 2
+    eye_dist = max(float(np.linalg.norm(eye_l - eye_r)), 1.0)
+    return {
+        "x": float(x + bw / 2),
+        "y": float(y + bh / 2),
+        "w": float(bw),
+        "h": float(bh),
+        "yaw": float((nose[0] - eyes[0]) / eye_dist),
+        # Coming closer, the eyes (near the lens) grow faster than the face outline (cheeks, further back),
+        # and the nose tip (nearest) drops further below the eyes. A flat picture keeps both ratios.
+        "spread": eye_dist / float(bw),
+        "nose": float(nose[1] - eyes[1]) / eye_dist,
+    }
+
+
+def frame(m: Models, img):
+    face = detect(m, img)
+    if face is None or min(face[2], face[3]) < MIN_FACE:
+        return None
     emb = m.rec.feature(m.rec.alignCrop(img, face)).flatten()
-    emb = emb / np.linalg.norm(emb)
 
     # MiniFASNetV2: 2.7x box crop, 80x80, BGR, raw 0-255 floats, class 1 = real.
+    h, w = img.shape[:2]
+    x, y, bw, bh = face[:4]
     s = min((h - 1) / bh, (w - 1) / bw, 2.7)
     cx, cy = x + bw / 2, y + bh / 2
     x1, y1 = max(0, int(cx - bw * s / 2)), max(0, int(cy - bh * s / 2))
@@ -101,41 +138,18 @@ def frame(m: Models, jpeg: bytes):
     m.fas.setInput(crop.transpose(2, 0, 1)[None])
     logits = m.fas.forward()[0]
     p = np.exp(logits - logits.max())
-    real = float(p[1] / p.sum())
 
-    return {"yaw": float(yaw), "pitch": float(pitch), "emb": emb, "real": real}
-
-
-def decode(jpeg: bytes):
-    return cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
-
-
-def point(m: Models, img):
-    """Where the face is in a snapshot: centre, width (px) and yaw. None without a face."""
-    h, w = img.shape[:2]
-    m.det.setInputSize((w, h))
-    _, faces = m.det.detect(img)
-    if faces is None:
-        return None
-    face = max(faces, key=lambda f: f[2] * f[3])
-    x, y, bw, bh = face[:4]
-    eye_r, eye_l, nose = face[4:10].reshape(3, 2)
-    yaw = (nose[0] - (eye_r[0] + eye_l[0]) / 2) / max(np.linalg.norm(eye_l - eye_r), 1.0)
-    return {"x": float(x + bw / 2), "y": float(y + bh / 2), "w": float(bw), "yaw": float(yaw)}
+    return {**shape(face), "emb": emb / np.linalg.norm(emb), "real": float(p[1] / p.sum())}
 
 
 def grey(img, size=(30, 40)):
     return cv2.resize(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), size, interpolation=cv2.INTER_AREA).astype(np.float32)
 
 
-def continuity(m: Models, track: list[bytes], frames: list[bytes], marks: list[int]) -> dict | None:
+def continuity(pts, thumbs, frames, marks) -> dict | None:
     """None if the snapshots show one face throughout; else the failure with its numbers."""
-    thumbs = [decode(t) for t in track]
-    if any(t is None for t in thumbs):
-        return {"ok": False, "reason": "continuity", "detail": {"error": "bad snapshot"}}
     # Each full frame must be the very picture its snapshot was taken from.
-    same = max(float(np.abs(grey(decode(f)) - grey(thumbs[i])).mean()) for f, i in zip(frames, marks))
-    pts = [point(m, t) for t in thumbs]
+    same = max(float(np.abs(grey(f) - grey(thumbs[i])).mean()) for f, i in zip(frames, marks))
     gap = run = 0
     for p in pts:
         run = 0 if p else run + 1
@@ -161,49 +175,117 @@ def continuity(m: Models, track: list[bytes], frames: list[bytes], marks: list[i
     return None
 
 
-def analyze(m: Models, frames: list[bytes], challenge: list[str], track: list[bytes] | None = None, marks: list[int] | None = None) -> dict:
-    """frames are grouped by challenge step, in order: len(frames) is a multiple of len(challenge).
-    track/marks: the snapshots and which snapshot each frame was taken with (required by the endpoint)."""
-    if track is not None:
-        broken = continuity(m, track, frames, marks)
-        if broken:
-            return broken
-    per = len(frames) // len(challenge)
-    seen = [frame(m, f) for f in frames]
+def flash(pts, thumbs, times, colors) -> tuple[float, int]:
+    """How well the face's colour followed the screen's: the best correlation over the camera lags, and that lag."""
+    obs, ts = [], []
+    for p, img, t in zip(pts, thumbs, times):
+        if not p:
+            continue
+        h, w = img.shape[:2]
+        # Cheeks and nose (the box centre sits about on the nose), against everything well clear of the face.
+        fx1, fx2 = int(p["x"] - p["w"] / 4), int(p["x"] + p["w"] / 4)
+        fy1, fy2 = int(p["y"] - p["h"] / 10), int(p["y"] + p["h"] * 0.3)
+        face = img[max(fy1, 0) : max(fy2, 1), max(fx1, 0) : max(fx2, 1)].reshape(-1, 3)
+        mask = np.ones((h, w), bool)
+        mask[max(int(p["y"] - p["h"] * 0.8), 0) : int(p["y"] + p["h"] * 0.8), max(int(p["x"] - p["w"] * 0.7), 0) : int(p["x"] + p["w"] * 0.7)] = False
+        if len(face) < 9 or mask.mean() < 0.05:
+            continue
+        # Over the background: the camera's white balance and exposure scale both alike, so they cancel.
+        rgb = (face.mean(0) + 1) / (img[mask].mean(0) + 1)
+        obs.append(rgb[::-1] / rgb.sum())  # chromaticity, RGB order: brightness (and distance) drop out
+        ts.append(t)
+    if len(obs) < 10:
+        return 0.0, 0
+    obs = np.array(obs)
+    ts = np.array(ts)
+    # Before the flash the screen is white; after it, it stays on the last colour.
+    shown = np.array([[255, 255, 255], *colors], np.float32)
+    shown = (shown + 1) / (shown + 1).sum(1, keepdims=True)
+    best = (0.0, 0)
+    for lag in LAGS:
+        idx = np.clip(np.floor((ts - lag) / FLASH_MS).astype(int) + 1, 0, len(colors))
+        exp = shown[idx]
+        rs = [np.corrcoef(obs[:, c], exp[:, c])[0, 1] for c in range(3) if exp[:, c].std() > 1e-6 and obs[:, c].std() > 1e-9]
+        r = float(np.mean(rs)) if rs else 0.0
+        if r > best[0]:
+            best = (r, lag)
+    return best
+
+
+def depth(far, close) -> float:
+    """Mean relative growth of the two depth ratios from far to close (0 for a flat picture)."""
+    grow = lambda k: np.mean([s[k] for s in close]) / np.mean([s[k] for s in far]) - 1
+    return float((grow("spread") + grow("nose")) / 2)
+
+
+def analyze(m: Models, frames: list[bytes], track: list[bytes], marks: list[int], times: list[int], colors: list[list[int]], oval: dict) -> dict:
+    """frames: FAR far ones, then close ones. track: snapshots, times: each one's ms from the flash start.
+    marks: the snapshot each frame was taken with. colors: the RGB sequence shown. oval: where the close
+    face had to end up, {x, y, w} as shares of the mirrored preview (what the student saw)."""
+    thumbs = [decode(t) for t in track]
+    full = [decode(f) for f in frames]
+    if any(t is None for t in thumbs + full):
+        return {"ok": False, "reason": "continuity", "detail": {"error": "bad picture"}}
+    pts = [None if (f := detect(m, t)) is None else shape(f) for t in thumbs]
+    broken = continuity(pts, thumbs, full, marks)
+    if broken:
+        return broken
+
+    seen = [frame(m, f) for f in full]
     if any(s is None for s in seen):
         return {"ok": False, "reason": "no_face", "detail": {"missing": f"{sum(s is None for s in seen)} of {len(seen)}"}}
+    far, close = seen[:FAR], seen[FAR:]
 
-    steps = [seen[i * per : (i + 1) * per] for i in range(len(challenge))]
-    center = [s for step, kind in zip(steps, challenge) if kind == "center" for s in step]
-    if not center:
-        return {"ok": False, "reason": "challenge"}
-    yaw0 = np.mean([s["yaw"] for s in center])
-    pitch0 = np.mean([s["pitch"] for s in center])
-
-    # Frames come straight from the camera (not mirrored): turning to the subject's left moves the nose to image right.
-    # How far each step moved (its best frame) against what it needs. On failure the numbers go back for tuning.
-    moved = {
-        "left": lambda s: s["yaw"] - yaw0,
-        "right": lambda s: yaw0 - s["yaw"],
-        "up": lambda s: pitch0 - s["pitch"],
-    }
-    need = {"left": TURN, "right": TURN, "up": TILT}
-    best = {kind: round(max(moved[kind](s) for s in step), 3) for step, kind in zip(steps, challenge) if kind != "center"}
-    if not all(best[k] > need[k] for k in best):
-        # Every frame's yaw/pitch in step order, so a bad "center" baseline shows up too.
-        frames = " ".join(f"{kind}:{s['yaw']:+.2f}/{s['pitch']:.2f}" for step, kind in zip(steps, challenge) for s in step)
-        return {"ok": False, "reason": "challenge", "detail": {**{k: f"{v} of {need[k]}" for k, v in best.items()}, "frames": frames}}
-
-    emb = np.mean([s["emb"] for s in center], axis=0)
+    # The preview is mirrored, the frames aren't: the oval's x flips.
+    ox, oy, ow = (1 - oval["x"]) * W, oval["y"] * H, oval["w"] * W
+    cx, cy, cw = (np.mean([s[k] for s in close]) for k in ("x", "y", "w"))
+    r, lag = flash(pts, thumbs, times, colors)
+    emb = np.mean([s["emb"] for s in seen], axis=0)
     emb = emb / np.linalg.norm(emb)
     # The scores go back on every outcome, so passes show their margins too.
-    scores = {**best, "same": round(min(float(s["emb"] @ emb) for s in seen), 3), "real": round(float(np.mean([s["real"] for s in seen])), 3)}
+    scores = {
+        "closer": round(float(cw / np.mean([s["w"] for s in far])), 2),
+        "oval": round(float(np.hypot((cx - ox) / W, (cy - oy) / H)), 3),
+        "fit": round(float(cw / ow), 2),
+        "depth": round(depth(far, close), 3),
+        "flash": round(r, 3),
+        "lag": lag,
+        "same": round(min(float(s["emb"] @ emb) for s in seen), 3),
+        "real": round(float(np.mean([s["real"] for s in far])), 3),
+    }
+    if scores["closer"] < CLOSER or scores["oval"] > OVAL_SHIFT or not OVAL_FIT[0] <= scores["fit"] <= OVAL_FIT[1]:
+        return {"ok": False, "reason": "approach", "detail": scores}
     if scores["same"] < SAME_FACE:
         return {"ok": False, "reason": "same_face", "detail": scores}
-    if scores["real"] < REAL:
+    if scores["flash"] < FLASH:
+        return {"ok": False, "reason": "flash", "detail": scores}
+    if scores["depth"] < DEPTH or scores["real"] < REAL:
         return {"ok": False, "reason": "spoof", "detail": scores}
 
     return {"ok": True, "embedding": base64.b64encode(emb.astype("<f4").tobytes()).decode(), "detail": scores}
+
+
+def valid(body: dict) -> bool:
+    frames, track, marks, times, colors, oval = (body.get(k) for k in ("frames", "track", "marks", "times", "colors", "oval"))
+    return (
+        isinstance(frames, list)
+        and FAR < len(frames) <= 8
+        and all(isinstance(f, str) and len(f) <= 100_000 for f in frames)
+        and isinstance(track, list)
+        and 10 <= len(track) <= 60
+        and all(isinstance(t, str) and len(t) <= 100_000 for t in track)
+        and isinstance(marks, list)
+        and len(marks) == len(frames)
+        and all(isinstance(i, int) and 0 <= i < len(track) for i in marks)
+        and isinstance(times, list)
+        and len(times) == len(track)
+        and all(isinstance(t, int) and -5_000 <= t <= 10_000 for t in times)
+        and isinstance(colors, list)
+        and 3 <= len(colors) <= 16
+        and all(isinstance(c, list) and len(c) == 3 and all(isinstance(v, int) and 0 <= v <= 255 for v in c) for c in colors)
+        and isinstance(oval, dict)
+        and all(isinstance(oval.get(k), (int, float)) and 0 < oval[k] < 1 for k in ("x", "y", "w"))
+    )
 
 
 # ponytail: 2 CPUs x 2 inputs per container, up to 40 containers (~80 checks in flight, ~1000 students in well
@@ -218,8 +300,8 @@ class Face:
         cv2.setNumThreads(1)
         models()
 
-    # POST {challenge: ["center", "left", ...], frames: [base64 jpeg, ...], track: [base64 jpeg, ...],
-    #       marks: [track index per frame]} -> {ok, reason?, detail?, embedding?}
+    # POST {frames, track, marks, times, colors, oval} (see analyze) -> {ok, reason?, detail?, embedding?}
+    # colors and oval come from the ticket, through Vercel, never from the phone.
     # POST {warm: true} wakes a container when the lecturer presses Start.
     # Modal's proxy auth rejects calls without the workspace's Modal-Key/Modal-Secret headers before
     # any container starts, so strangers can't spend the credits.
@@ -227,35 +309,39 @@ class Face:
     def check(self, body: dict):
         if body.get("warm"):
             return {"ok": True}
-        challenge, frames, track, marks = body.get("challenge"), body.get("frames"), body.get("track"), body.get("marks")
-        if (
-            not isinstance(challenge, list)
-            or not 1 <= len(challenge) <= 4
-            or any(c not in ("center", "left", "right", "up") for c in challenge)
-            or not isinstance(frames, list)
-            or not 1 <= len(frames) <= 12
-            or len(frames) % len(challenge)
-            or any(not isinstance(f, str) or len(f) > 100_000 for f in frames)
-            or not isinstance(track, list)
-            or not 10 <= len(track) <= 40
-            or any(not isinstance(t, str) or len(t) > 100_000 for t in track)
-            or not isinstance(marks, list)
-            or len(marks) != len(frames)
-            or any(not isinstance(i, int) or not 0 <= i < len(track) for i in marks)
-        ):
+        if not valid(body):
             raise HTTPException(400)
         b64 = base64.b64decode
-        return analyze(models(), [b64(f) for f in frames], challenge, [b64(t) for t in track], marks)
+        return analyze(models(), [b64(f) for f in body["frames"]], [b64(t) for t in body["track"]], body["marks"], body["times"], body["colors"], body["oval"])
 
 
 if __name__ == "__main__":
-    import sys
-    import time
+    # Self-check of the flash maths on synthetic snapshots (no models, no faces): `uv run face/bench.py` deps,
+    #   uv run --with opencv-python-headless==5.0.0.93 --with numpy==2.5.4 --with modal==1.5.5 python face/app.py
+    rng = np.random.default_rng(1)
+    colors = [[255, 40, 40], [40, 255, 40], [40, 80, 255], [255, 255, 40], [255, 40, 255], [40, 80, 255], [40, 255, 40], [255, 255, 255]]
+    times = list(range(-1000, 3200, 100))
+    pts = [{"x": 80.0, "y": 100.0, "w": 60.0, "h": 70.0} for _ in times]
 
-    m = models(sys.argv[1])
-    imgs = [open(p, "rb").read() for p in sys.argv[2:]]
-    for f in imgs:
-        t = time.perf_counter()
-        s = frame(m, f)
-        print(f"{(time.perf_counter() - t) * 1000:.0f} ms", s and {k: round(v, 3) for k, v in s.items() if k != "emb"})
-    print(analyze(m, imgs, ["center"]))
+    def snapshots(lit: bool, lag=150):
+        out = []
+        for t in times:
+            img = np.full((213, 160, 3), 110.0)
+            i = int((t - lag) // FLASH_MS) + 1
+            screen = np.array(([255, 255, 255], *colors)[min(max(i, 0), len(colors))], float)[::-1]  # BGR
+            skin = np.array([120.0, 140.0, 190.0])  # BGR
+            # A real face 30 cm from the screen catches its colour; a replayed video doesn't.
+            img[65:135, 45:115] = skin * (0.7 + 0.5 * screen / 255) if lit else skin
+            gain = rng.uniform(0.85, 1.15)  # auto exposure and white balance wandering, whole frame alike
+            out.append(np.clip(img * gain + rng.normal(0, 3, img.shape), 0, 255).astype(np.uint8))
+        return out
+
+    live, lag = flash(pts, snapshots(True), times, colors)
+    replay, _ = flash(pts, snapshots(False), times, colors)
+    print(f"flash: live {live:.2f} at {lag} ms, replay {replay:.2f}")
+    assert live > 0.9 and 100 <= lag <= 200, (live, lag)
+    assert replay < FLASH, replay
+    far = [{"spread": 0.40, "nose": 0.60}] * 2
+    assert abs(depth(far, [{"spread": 0.40 * 1.08, "nose": 0.60 * 1.05}] * 2) - 0.065) < 1e-6
+    assert abs(depth(far, far)) < 1e-9
+    print("ok")
