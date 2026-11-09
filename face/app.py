@@ -253,7 +253,9 @@ def smile(pts, times, smiles) -> dict:
     for i, c in enumerate(smiles):
         up.append(widen(c + 300, c + SMILE_MS, 0.75))  # people take a moment to react
         early.append(widen(c - 600, c + 200, 0.5))
-        relax.append(widen(c + SMILE_MS + 600, smiles[i + 1] - 600 if i + 1 < len(smiles) else c + SMILE_MS + RELAX_MS, 0.5))
+        # While "Relax" shows (1 s after the window), once people have had a moment: a fixed slice, so a
+        # second smile soon after can't squeeze it to nothing.
+        relax.append(widen(c + SMILE_MS + 400, c + SMILE_MS + 1000, 0.5))
     # A window with no face in it counts against the student: nothing seen, nothing proven.
     worst = lambda xs, missing, pick: round(missing if None in xs else pick(xs), 3)
     return {"smile": worst(up, 0.0, min), "early": worst(early, 9.0, max), "relax": worst(relax, 9.0, max)}
@@ -402,7 +404,7 @@ if __name__ == "__main__":
     ts = list(range(-1000, 3200, 100)) + list(range(3200, 9000, 200))
     def mouths(smile_at):
         return [{"mouth": 0.90 * (1.17 if any(a + 500 <= t < a + 1900 for a in smile_at) else 1) * rng.uniform(0.98, 1.02)} for t in ts]
-    cues = [500, 3800]
+    cues = [500, 3700]  # the tightest gap: 2 s window + 1.2 s
     live = smile(mouths(cues), ts, cues)
     late = smile(mouths([1400, 5200]), ts, cues)  # a recording whose smiles land a beat off
     print(f"smile: live {live}, recording {late}")
