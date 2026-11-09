@@ -2586,6 +2586,35 @@ body:has(.phone) {
 }
 /* Face check oval, placed by FaceCheck: --ox, --oy its centre and --ow its width, as shares of the
    preview (the challenge's oval comes from the server). Its height is ~1.37x its width in pixels. */
+/* QR scanner: switch between the back and front camera, top-right over the mask. 52px: a full touch target. */
+.camera-switch {
+  position: absolute;
+  top: var(--s3);
+  right: var(--s3);
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--si-white);
+  color: var(--si-ink);
+  cursor: pointer;
+}
+.camera-switch svg {
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.camera-switch:focus-visible {
+  outline: 3px solid var(--si-white);
+  outline-offset: 3px;
+}
 .frame-face {
   position: absolute;
   left: calc((var(--ox) - var(--ow) / 2) * 100%);
