@@ -45,8 +45,11 @@ export function Attend({ title, sessionId }: { title: string; sessionId: string 
   }
 
   const scanned = (code: string) => {
-    // Only codes for this session; anything else (a URL, another class) is ignored.
-    if (!busy && code.startsWith(`${sessionId}.`)) getTicket(code);
+    if (busy) return;
+    if (code.startsWith(`${sessionId}.`)) return getTicket(code);
+    // An attendance code (session.node.time.signature) for another session: say so, rather than seem stuck.
+    // Anything else (a URL, a product barcode) is ignored.
+    if (/^\w{10}\.[^.]+\.\d+\.[\w-]+$/.test(code)) setError("That QR code is for a different class session. Scan the one for this class.");
   };
 
   // No index number first: the server matches the face against the course. indexNo only after it asked.
